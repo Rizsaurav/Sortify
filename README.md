@@ -42,7 +42,7 @@ List the ready features here:
 
 ## Screenshots
 
-<img src = https://drive.google.com/file/d/1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA/view?usp=sharing >
+![Alt text](https://drive.google.com/uc?export=view&id=1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA)
 
 
 
