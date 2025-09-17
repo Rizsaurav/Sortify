@@ -42,7 +42,7 @@ List the ready features here:
 
 ## Screenshots
 
-<img width="720" height="720" alt="image" src="https://github.com/user-attachments/assets/2b861aa4-6b60-411c-9e16-0b951b638bee" />
+<img src = https://drive.google.com/file/d/1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA/view?usp=sharing >
 
 
 
