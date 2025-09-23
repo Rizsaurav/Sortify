@@ -6,7 +6,10 @@
 # Node artifact files
 node_modules/
 dist/
-
+*.pkl
+*.npy
+*bin
+*safetensors
 # Compiled Java class files
 *.class
 
