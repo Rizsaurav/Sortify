@@ -12,3 +12,17 @@ export async function insertDocument(content, embedding) {
     if (error) throw error
     return data
   }
+
+/**
+ * Search for similar documents using pgvector similarity
+ * @param {Array<number>} queryEmbedding - Embedding of the query
+ * @param {number} matchCount - How many results to return (default: 5)
+ */
+export async function searchDocuments(queryEmbedding, matchCount = 5) {
+    const { data, error } = await supabase.rpc('match_documents', {
+      query_embedding: queryEmbedding,
+      match_count: matchCount,
+    })
+    if (error) throw error
+    return data
+  }
