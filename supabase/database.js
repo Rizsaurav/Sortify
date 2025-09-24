@@ -38,3 +38,16 @@ export async function updateDocument(id, content, embedding) {
     if (error) throw error
     return data
   }
+
+  /**
+ * Fetch a single document by ID
+ */
+export async function getDocumentById(id) {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (error) throw error
+    return data
+  }
