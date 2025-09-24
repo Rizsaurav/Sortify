@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 
 app = FastAPI(
-    title="My FastAPI Project",
-    description="A simple FastAPI starter",
+    title="Sortify",
+    description="Organizes and answers from my pdf files",
     version="1.0.0"
 )
 
@@ -10,14 +10,18 @@ app = FastAPI(
 async def home():
     return {"message": "Hello, World!"}
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
+@app.get("/login")
+async def login():
+    return {"login": "logged in"}
+
+@app.get("/register")
+async def register():
+    return {"register": "registered"}
 
 @app.get("/about")
 async def about():
     return {
-        "app_name": "My FastAPI Project",
+        "app_name": "Sortify",
         "version": "1.0.0",
-        "description": "A simple FastAPI starter"
+        "description": "Organizes and answers from my pdf files"
     }
