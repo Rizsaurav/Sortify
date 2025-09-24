@@ -26,3 +26,15 @@ export async function searchDocuments(queryEmbedding, matchCount = 5) {
     if (error) throw error
     return data
   }
+
+/**
+ * Update an existing document (content + embedding)
+ */
+export async function updateDocument(id, content, embedding) {
+    const { data, error } = await supabase
+      .from('documents')
+      .update({ content, embedding })
+      .eq('id', id)
+    if (error) throw error
+    return data
+  }
