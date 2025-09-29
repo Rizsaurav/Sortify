@@ -43,4 +43,38 @@ export function LoginForm() {
           [e.target.name]: e.target.value,
         }))
       }
+      
+      return (
+        <form onSubmit={handleSubmit}>
+          <h2>Sign In</h2>
+          <p>Enter your credentials to access your account</p>
+    
+          {/* Email */}
+          <div>
+            <label htmlFor="email">Email Address</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={loginData.email}
+              onChange={handleInputChange}
+              required
+            />
+          </div>
+    
+          {/* Password */}
+          <div>
+            <label htmlFor="password">Password</label>
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={loginData.password}
+              onChange={handleInputChange}
+              required
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
     
