@@ -25,7 +25,7 @@ export function LoginForm() {
       } finally {
         setIsLoading(false)
       }
-    }}
+    }
 
     const handleGoogleLogin = async () => {
         try {
@@ -77,4 +77,33 @@ export function LoginForm() {
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
-    
+          
+          {/* Remember + Forgot */}
+        <div>
+            <label>
+            <input id="remember" type="checkbox" />
+            Remember me
+            </label>
+            <a href="/forgot-password">Forgot password?</a>
+        </div>
+
+        {/* Error message */}
+        {loginError && <p style={{ color: "red" }}>{loginError}</p>}
+
+        {/* Submit */}
+        <button type="submit" disabled={isLoading}>
+            {isLoading ? "Signing In..." : "Sign In"}
+        </button>
+
+        {/* Google login */}
+        <button type="button" onClick={handleGoogleLogin}>
+            Sign in with Google
+        </button>
+
+        {/* Redirect */}
+        <p>
+            Don’t have an account? <a href="/signup">Sign up</a>
+        </p>
+        </form>
+    )
+}
