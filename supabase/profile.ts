@@ -34,3 +34,28 @@ export async function updateMyProfile(profile: {
   if (error) throw error
   return data
 }
+
+// Ensure a profile exists after login
+export async function createProfileIfNotExists() {
+   
+    // Get auth user
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError) throw userError
+    if (!user) throw new Error("No logged-in user")
+  
+    // Check if profile exists
+    const { data: existingProfile, error: profileError } = await supabase.rpc("current_user_profile")
+    if (profileError) throw profileError
+  
+    if (!existingProfile || existingProfile.length === 0) {
+     
+        // Create default profile from auth metadata
+      return await updateMyProfile({
+        username: user.email?.split("@")[0] || user.id,
+        full_name: user.user_metadata?.full_name ?? null,
+        avatar_url: user.user_metadata?.avatar_url ?? null,
+      })
+    }
+  
+    return existingProfile[0]
+  }
