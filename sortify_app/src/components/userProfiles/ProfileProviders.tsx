@@ -57,3 +57,44 @@ import {
       }
       init()
     }, [])
+
+     // Refresh manually
+  const refreshProfile = async () => {
+    setLoading(true)
+    try {
+      const p = await getCurrentProfile()
+      setProfile(p)
+      setError(null)
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to refresh profile")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Update user profile
+  const updateProfile = async (updates: Partial<Profile>) => {
+    try {
+      const p = await updateMyProfile(updates)
+      setProfile(p)
+      setError(null)
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to update profile")
+    }
+  }
+
+  return (
+    <ProfileContext.Provider
+      value={{ profile, loading, error, refreshProfile, updateProfile }}
+    >
+      {children}
+    </ProfileContext.Provider>
+  )
+}
+
+// Simple hook for usage
+export function useProfile() {
+  const ctx = useContext(ProfileContext)
+  if (!ctx) throw new Error("useProfile must be used within a ProfileProvider")
+  return ctx
+}
