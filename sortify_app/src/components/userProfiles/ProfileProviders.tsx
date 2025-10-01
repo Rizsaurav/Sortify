@@ -3,13 +3,14 @@ import {
     useContext,
     useEffect,
     useState,
-    ReactNode,
   } from "react"
+  import type { ReactNode } from "react"
+
   import {
     getCurrentProfile,
     updateMyProfile,
     createProfileIfNotExists,
-  } from "../../../supabase/profile"
+  } from "../../../../supabase/profile"
   
   type Profile = {
     id: string
