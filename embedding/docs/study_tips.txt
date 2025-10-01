@@ -1,0 +1,48 @@
+Effective Study Techniques for Computer Science
+
+Active Learning Strategies:
+
+1. Spaced Repetition: Review material at increasing intervals
+   - Use flashcards for terminology
+   - Practice coding problems daily
+   - Revisit concepts weekly
+
+2. Practice Coding: The most important skill for CS
+   - Work on small projects
+   - Solve algorithm problems
+   - Contribute to open source
+   - Build a portfolio
+
+3. Explain Concepts: Teaching solidifies understanding
+   - Write blog posts about what you learn
+   - Explain to study partners
+   - Create tutorial videos
+   - Answer questions on forums
+
+4. Break Down Complex Topics:
+   - Start with fundamentals
+   - Build up to advanced concepts
+   - Use diagrams and visualizations
+   - Connect to real-world examples
+
+Time Management:
+- Pomodoro Technique: 25-minute focused sessions
+- Schedule specific times for different subjects
+- Take regular breaks to avoid burnout
+- Prioritize difficult topics when you're fresh
+
+Resources:
+- Online courses (Coursera, edX, Udemy)
+- Documentation and official guides
+- Stack Overflow and developer communities
+- GitHub for code examples
+- YouTube tutorials for visual learning
+
+Debugging Skills:
+- Read error messages carefully
+- Use print statements strategically
+- Learn to use debuggers
+- Test code incrementally
+- Write unit tests
+
+Remember: Consistency beats intensity. Regular, focused study sessions are more effective than cramming!
