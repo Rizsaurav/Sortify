@@ -1,3 +1,64 @@
+Sortify Profiles - Frontend Basics
+
+This file gives frontend developers the essential details on how to work with user profiles.
+
+---
+
+Profiles Table
+Each user has one row in the `profiles` table, linked to their Supabase Auth `id`.
+
+Columns:
+- id (uuid, same as auth.users.id)
+- username (unique, case-insensitive)
+- full_name (text)
+- avatar_url (text)
+- bio (text)
+- hobbies (text[])
+- interests (text[])
+- website (text)
+- location (text)
+- social_links (jsonb)
+- created_at / updated_at (timestamps, auto-managed)
+
+---
+
+Row Level Security (RLS)
+- Users can **only see/update/insert their own profile**.
+- Nobody can edit or view other users’ profiles by default.
+
+---
+
+Utility RPCs
+
+1. current_user_profile()
+- Returns the logged-in user’s profile.
+- Example:
+```js
+const { data, error } = await supabase.rpc("current_user_profile");
+```
+2. update_my_profile(...)
+- Insert or update your profile in one call.
+- Example:
+```js
+const { data, error } = await supabase.rpc("update_my_profile", {
+  p_username: "saurav_r",
+  p_full_name: "Saurav Rijal",
+  p_bio: "CS major, loves AI",
+  p_hobbies: ["coding", "cycling"]
+});
+
+Usage Flow
+1. After login, call `current_user_profile()`.
+2. If no profile exists, show option to create one.
+3. Display default name from Auth if profile is missing.
+4. To update, call `update_my_profile()` with changed fields only.
+
+---
+
+That’s it! Frontend only needs `current_user_profile()` and `update_my_profile()`.
+
+
+
 create table profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   username text unique,
@@ -25,3 +86,5 @@ create trigger update_profiles_updated_at
 before update on profiles
 for each row
 execute function set_updated_at();
+
+
