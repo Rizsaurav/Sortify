@@ -3,3 +3,4 @@
 *.bin
 *.safetensors
 *.env
+Qwen3-Embedding-0.6B/
