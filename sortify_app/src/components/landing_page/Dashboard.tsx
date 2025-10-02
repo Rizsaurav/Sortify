@@ -4,6 +4,15 @@ import { supabase } from '../../../../supabase/client';
 import { useProfile } from '../userProfiles/ProfileProviders';
 import { useNavigate } from 'react-router-dom';
 
+const DEMO_FILES = [
+  { id: 'demo-1', name: 'Sample Assignment.pdf', type: 'application/pdf', size: '2.4 MB', modified: '2 hours ago', category: 'Assignments', created_at: new Date().toISOString() },
+  { id: 'demo-2', name: 'Lecture Notes.txt', type: 'text/plain', size: '1.2 MB', modified: '1 day ago', category: 'Lectures', created_at: new Date().toISOString() },
+  { id: 'demo-3', name: 'Research Paper.pdf', type: 'application/pdf', size: '5.8 MB', modified: '3 days ago', category: 'Research', created_at: new Date().toISOString() },
+  { id: 'demo-4', name: 'Math Homework.pdf', type: 'application/pdf', size: '890 KB', modified: '5 days ago', category: 'Math', created_at: new Date().toISOString() },
+  { id: 'demo-5', name: 'Biology Lab Report.docx', type: 'application/msword', size: '3.1 MB', modified: '1 week ago', category: 'Science', created_at: new Date().toISOString() },
+];
+
+
 const frequentFolders = [
   { name: "Assignments", icon: BookOpen, color: "text-blue-500" },
   { name: "Lecture Notes", icon: GraduationCap, color: "text-green-500" },
@@ -149,6 +158,20 @@ export default function Dashboard() {
   };
 
   const checkAuth = async () => {
+    const isGuestMode = localStorage.getItem('isGuest');
+    
+    if (isGuestMode === 'true') {
+      setIsAuthenticated(true);
+      setIsLoading(false); // SET THIS IMMEDIATELY
+      setUserName('Guest User');
+      setUserEmail('guest@sortify.app');
+      
+      // ... rest of demo data setup
+      
+      return; // STOP - don't check session
+    }
+    
+    // Only check session if NOT guest
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -165,6 +188,8 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   };
+  
+  
 
   const handleLogout = async () => {
     try {
@@ -594,17 +619,21 @@ export default function Dashboard() {
     setPreviewType('none');
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-      </div>
-    );
-  }
+// Check guest mode at render level
+const isGuest = localStorage.getItem('isGuest') === 'true';
 
-  if (!isAuthenticated) {
-    return null;
-  }
+if (isLoading && !isGuest) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+    </div>
+  );
+}
+
+if (!isAuthenticated && !isGuest) {
+  return null;
+}
+
 
   const storageLimit = 15 * 1024 * 1024 * 1024;
   const storagePercentage = Math.min((storageUsed / storageLimit) * 100, 100);
