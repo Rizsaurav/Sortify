@@ -15,21 +15,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 active:bg-primary/80",
         destructive:
-          "bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-white shadow-xs hover:bg-destructive/90 active:bg-destructive/80 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground active:bg-accent/80 dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 active:bg-secondary/70",
+        ghost: "hover:bg-accent hover:text-accent-foreground active:bg-accent/80 dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
+        default: "h-10 px-4 py-2 has-[>svg]:px-3 sm:h-9",
+        sm: "h-9 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5 sm:h-8",
+        lg: "h-11 rounded-md px-6 has-[>svg]:px-4 sm:h-10",
+        icon: "size-10 sm:size-9",
       },
     },
     defaultVariants: {
@@ -67,7 +67,7 @@ function Avatar({
   return (
     <AvatarPrimitive.Root
       data-slot="avatar"
-      className={cn("relative flex size-8 shrink-0 overflow-hidden rounded-full", className)}
+      className={cn("relative flex size-9 shrink-0 overflow-hidden rounded-full sm:size-8", className)}
       {...props}
     />
   )
@@ -99,7 +99,7 @@ function AvatarFallback({
 
 /* ---------------- Badge ---------------- */
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center rounded-md border px-2.5 py-1 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden sm:px-2 sm:py-0.5",
   {
     variants: {
       variant: {
@@ -144,7 +144,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "z-50 min-w-[8rem] rounded-md border bg-popover p-1 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out",
+          "z-50 min-w-[10rem] rounded-md border bg-popover p-1 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out sm:min-w-[8rem]",
           className
         )}
         {...props}
@@ -168,7 +168,7 @@ function DropdownMenuItem({
       data-inset={inset}
       data-variant={variant}
       className={cn(
-        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none",
+        "relative flex cursor-default select-none items-center rounded-sm px-2 py-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:opacity-50 data-[disabled]:pointer-events-none sm:py-1.5",
         variant === "destructive" && "text-destructive focus:bg-destructive/10",
         className
       )}
@@ -185,7 +185,7 @@ function DropdownMenuCheckboxItem({
   return (
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
-      className={cn("relative flex cursor-default items-center rounded-sm pl-8 pr-2 py-1.5 text-sm outline-none", className)}
+      className={cn("relative flex cursor-default items-center rounded-sm pl-8 pr-2 py-2 text-sm outline-none sm:py-1.5", className)}
       checked={checked}
       {...props}
     >
@@ -207,7 +207,7 @@ function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
-      className={cn("relative flex cursor-default items-center rounded-sm pl-8 pr-2 py-1.5 text-sm outline-none", className)}
+      className={cn("relative flex cursor-default items-center rounded-sm pl-8 pr-2 py-2 text-sm outline-none sm:py-1.5", className)}
       {...props}
     >
       <span className="absolute left-2 flex size-3.5 items-center justify-center">
@@ -226,7 +226,7 @@ function DropdownMenuLabel({
   return (
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
-      className={cn("px-2 py-1.5 text-sm font-medium", className)}
+      className={cn("px-2 py-2 text-sm font-medium sm:py-1.5", className)}
       {...props}
     />
   )
@@ -246,7 +246,7 @@ function DropdownMenuSubTrigger({
   return (
     <DropdownMenuPrimitive.SubTrigger
       data-slot="dropdown-menu-sub-trigger"
-      className={cn("flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none", className)}
+      className={cn("flex cursor-default items-center rounded-sm px-2 py-2 text-sm outline-none sm:py-1.5", className)}
       {...props}
     >
       {children}
