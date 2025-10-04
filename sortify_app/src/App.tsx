@@ -6,6 +6,8 @@ import { supabase } from "../../supabase/client"
 import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import Dashboard from "./components/landing_page/Dashboard"
+import AccountDetails from "./components/AccountDetails"
+import { DashboardLayout } from "./components/dashboard_layout"
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -36,6 +38,7 @@ function App() {
         <Route path="/login" element={session ? <Navigate to="/dashboard" /> : <LoginForm />} />
         <Route path="/signup" element={session ? <Navigate to="/dashboard" /> : <SignupForm />} />
         <Route path="/dashboard" element={session ? <Dashboard /> : <Navigate to="/login" replace />} />
+        <Route path="/account-details" element={session ? <DashboardLayout><AccountDetails /></DashboardLayout> : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
       </Routes>
     </Router>

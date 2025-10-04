@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "./UI/ui-core"
 import { BellIcon, MoonIcon, SunIcon } from "@heroicons/react/24/outline"
+import { Link } from 'react-router-dom'; // Assuming react-router-dom for navigation
 
 export function Header() {
   return (
