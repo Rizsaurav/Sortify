@@ -6,6 +6,8 @@ import { supabase } from "../../supabase/client"
 import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import Dashboard from "./components/landing_page/Dashboard"
+import {ProfileProvider} from "./components/userProfiles/ProfileProviders"
+
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -30,14 +32,19 @@ function App() {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
+
   return (
     <Router>
+      <ProfileProvider>
       <Routes>
         <Route path="/login" element={session ? <Navigate to="/dashboard" /> : <LoginForm />} />
         <Route path="/signup" element={session ? <Navigate to="/dashboard" /> : <SignupForm />} />
-        <Route path="/dashboard" element={session ? <Dashboard /> : <Navigate to="/login" replace />} />
+        <Route path="/dashboard" element={session || localStorage.getItem("isGuest") === "true"
+      ? <Dashboard />
+      : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
       </Routes>
+      </ProfileProvider>
     </Router>
   )
 }

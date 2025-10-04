@@ -43,6 +43,17 @@ import {
     // Load or create profile on mount
     useEffect(() => {
       async function init() {
+        // CHECK FOR GUEST MODE FIRST
+      const isGuest = localStorage.getItem('isGuest') === 'true';
+
+      if (isGuest) {
+        // Skip profile loading for guests
+        setProfile(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
         setLoading(true)
         try {
           const p = await createProfileIfNotExists()
@@ -61,6 +72,8 @@ import {
 
      // Refresh manually
   const refreshProfile = async () => {
+        // Skip for guests
+        if (localStorage.getItem('isGuest') === 'true') return;
     setLoading(true)
     try {
       const p = await getCurrentProfile()
@@ -75,6 +88,9 @@ import {
 
   // Update user profile
   const updateProfile = async (updates: Partial<Profile>) => {
+        // Skip for guests
+        if (localStorage.getItem('isGuest') === 'true') return;
+
     try {
       const p = await updateMyProfile(updates)
       setProfile(p)
