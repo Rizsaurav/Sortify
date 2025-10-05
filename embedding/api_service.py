@@ -18,6 +18,7 @@ import uvicorn
 from config import RAGConfig
 from rag_system import FastRAG, SearchResult
 from document_manager import DocumentManager
+from conversion.pdf_converter import PDFConverter
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -85,14 +86,29 @@ class RAGService:
         self.config = config or RAGConfig.from_env()
         self.rag = FastRAG(self.config)
         self.doc_manager = DocumentManager(self.config.documents_dir)
+        self.pdf_converter = PDFConverter(
+            pdf_dir="./pdf",
+            cache_dir="./storage/pdf_cache",
+            output_dir=self.config.documents_dir
+        )
         self.is_ready = False
         self.processing_stats = None
         
     async def initialize(self) -> ProcessingStatus:
         """Initialize the RAG system asynchronously."""
         try:
-            # Run document processing in thread pool
+            # Convert PDFs first
+            logger.info("Converting PDF files...")
             loop = asyncio.get_event_loop()
+            pdf_stats = await loop.run_in_executor(
+                None,
+                self.pdf_converter.convert_all_pdfs
+            )
+            
+            if pdf_stats['total'] > 0:
+                logger.info(f"PDF Conversion: {pdf_stats['converted']} converted, {pdf_stats['skipped']} skipped, {pdf_stats['failed']} failed")
+            
+            # Run document processing in thread pool
             stats = await loop.run_in_executor(
                 None, 
                 self.rag.process_documents
@@ -273,10 +289,50 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
 ):
-    """Upload a new document."""
+    """Upload a new document (supports .txt and .pdf files)."""
     try:
-        # Save uploaded file
-        file_path = rag_service.doc_manager.save_uploaded_file(file)
+        filename = file.filename.lower()
+        
+        # Handle PDF files
+        if filename.endswith('.pdf'):
+            # Save to pdf directory
+            pdf_dir = Path("./pdf")
+            pdf_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Clean filename
+            clean_filename = "".join(c for c in file.filename if c.isalnum() or c in ".-_")
+            pdf_path = pdf_dir / clean_filename
+            
+            # Save PDF
+            import shutil
+            with open(pdf_path, "wb") as f:
+                shutil.copyfileobj(file.file, f)
+            
+            # Convert PDF to text
+            logger.info(f"Converting uploaded PDF: {clean_filename}")
+            loop = asyncio.get_event_loop()
+            text_path = await loop.run_in_executor(
+                None,
+                rag_service.pdf_converter.convert_pdf,
+                pdf_path,
+                True  # Force conversion
+            )
+            
+            if text_path:
+                message = f"PDF uploaded and converted successfully to {text_path.name}. Processing in background."
+            else:
+                message = "PDF uploaded but conversion failed. Please check the file."
+        
+        # Handle text files
+        elif filename.endswith('.txt'):
+            file_path = rag_service.doc_manager.save_uploaded_file(file)
+            message = "Text document uploaded successfully. Processing in background."
+        
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Please upload .txt or .pdf files."
+            )
         
         # Schedule reprocessing in background
         background_tasks.add_task(reprocess_documents)
@@ -284,10 +340,12 @@ async def upload_document(
         return DocumentUploadResponse(
             filename=file.filename,
             status="uploaded",
-            message="Document uploaded successfully. Processing in background.",
+            message=message,
             timestamp=datetime.now()
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error uploading document: {e}")
         raise HTTPException(status_code=500, detail=str(e))

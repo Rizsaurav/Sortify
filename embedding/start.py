@@ -15,6 +15,7 @@ from typing import Optional
 from config import RAGConfig
 from rag_system import FastRAG
 from document_manager import DocumentManager
+from conversion.pdf_converter import PDFConverter
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +40,13 @@ def check_environment() -> bool:
             docs_path.mkdir(parents=True, exist_ok=True)
             logger.info(f"Created documents directory: {docs_path}")
         
+        # Check if PDF directory exists
+        pdf_path = Path("./pdf")
+        if pdf_path.exists():
+            pdf_files = list(pdf_path.glob("*.pdf")) + list(pdf_path.glob("*.PDF"))
+            if pdf_files:
+                logger.info(f"✓ Found {len(pdf_files)} PDF file(s) in pdf/ directory")
+        
         logger.info("✅ Environment check passed")
         return True
         
@@ -48,10 +56,42 @@ def check_environment() -> bool:
         traceback.print_exc()
         return False
 
+def convert_pdfs_to_text() -> dict:
+    """Convert PDF files to text before processing."""
+    try:
+        logger.info("📄 Checking for PDF files to convert...")
+        
+        config = RAGConfig.from_env()
+        converter = PDFConverter(
+            pdf_dir="./pdf",
+            cache_dir="./storage/pdf_cache",
+            output_dir=config.documents_dir
+        )
+        
+        # Convert all PDFs
+        stats = converter.convert_all_pdfs()
+        
+        if stats['total'] > 0:
+            logger.info(f"📊 PDF Conversion: {stats['converted']} converted, {stats['skipped']} skipped, {stats['failed']} failed")
+            if stats['converted'] > 0:
+                logger.info(f"✅ Converted {stats['converted']} PDF(s) to text in {config.documents_dir}")
+        else:
+            logger.info("📄 No PDF files found in ./pdf directory")
+        
+        return stats
+        
+    except Exception as e:
+        logger.warning(f"⚠️  PDF conversion encountered an issue: {e}")
+        logger.info("Continuing with existing text files...")
+        return {'total': 0, 'converted': 0, 'skipped': 0, 'failed': 0}
+
 def initialize_rag_system() -> Optional[FastRAG]:
     """Initialize the RAG system."""
     try:
         logger.info("🚀 Initializing RAG system...")
+        
+        # Convert PDFs first
+        convert_pdfs_to_text()
         
         config = RAGConfig.from_env()
         rag = FastRAG(config)
@@ -84,6 +124,9 @@ def run_terminal_qa():
     try:
         logger.info("🎓 Starting enhanced terminal Q&A interface...")
         
+        # Convert PDFs before starting terminal
+        convert_pdfs_to_text()
+        
         from qa_terminal import QATerminal
         terminal = QATerminal()
         terminal.run_interactive()
@@ -105,6 +148,9 @@ def run_api_service():
     """Run the API service."""
     try:
         logger.info("🌐 Starting API service...")
+        
+        # Convert PDFs before starting API
+        convert_pdfs_to_text()
         
         from api_service import run_api
         run_api()
