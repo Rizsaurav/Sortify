@@ -32,8 +32,22 @@ continuous chat. We have a team of 5: Saurav Rijal, Shivendra Bhagat, Aaditya Ba
 - Python
 - Flask or Express
 
-
 ## Features
+
+## Sprint 1
+
+  Abheek: "implemented document processing and semantic search capabilities for PDF files"
+
+* **Jira Task: Abheek - Implement document text extraction**
+   * KAN-49, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-49-mplement-document-text-extraction/)
+* **Jira Task: Abheek - Create PDF embedding model**
+   * KAN-91, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-91-create-pdf---embedding-model/)
+* **Jira Task: Abheek - Build semantic search functionality**
+   * KAN-51, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-51-build-semantic-search-functionali/)
+
+
+
+
 List the ready features here:
 - Document organization system, Feature name: Document Organizer, used by student 
 - Automated summarizing of files, Feature name: Document Summarizer, used by student 
