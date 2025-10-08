@@ -36,6 +36,8 @@ continuous chat. We have a team of 5: Saurav Rijal, Shivendra Bhagat, Aaditya Ba
 
 ## Sprint 1
 
+Contributors
+
   Abheek: "implemented document processing and semantic search capabilities for PDF files"
 
 * **Jira Task: Abheek - Implement document text extraction**
@@ -45,7 +47,14 @@ continuous chat. We have a team of 5: Saurav Rijal, Shivendra Bhagat, Aaditya Ba
 * **Jira Task: Abheek - Build semantic search functionality**
    * KAN-51, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-51-build-semantic-search-functionali/)
 
+  Aaditya: "Setup backend with FastApi and build routes for login/register and dynamic page loading"
 
+* **Jira Task: Aaditya - FastAPI Backend Project Setup**
+   * KAN-24, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-24_flask_backend)
+* **Jira Task: Aaditya - HomePage, AboutPage**
+   * KAN-23, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-23-make-the-api-endpoints-for-restfu)
+* **Jira Task: Aaditya - Login and Register Link**
+   * KAN-51, [Bitbucket]()
 
 
 List the ready features here:
