@@ -84,6 +84,8 @@ Contributors
 
 
 ## Reports
+![alt text](./BurnupCharts/image.png)
+
 
 
 ## Next Steps
@@ -110,12 +112,6 @@ List the ready features here:
 - Document organization system, Feature name: Document Organizer, used by student 
 - Automated summarizing of files, Feature name: Document Summarizer, used by student 
 - Efficient Retrieval of data, Feature name: Document Retriever, used by student
-
-
-## Burnup Report:
-
-![Alt text](https://drive.google.com/uc?export=view&id=1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA)
-![alt text](image.png)
 
 
 ## Setup
