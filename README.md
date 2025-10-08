@@ -95,7 +95,10 @@ Contributors
 * Document sorting into different folders
 
 **Shivendra**
-
+ * Update the ui according to the backend team's needs as they progress
+ * Add the chatbot ui
+ * Refactor the CSS for Dashboard
+ 
 **Saurav**
 * Refining RAG for richer output
 * Connecting RAG to the frontend
