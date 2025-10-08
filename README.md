@@ -96,12 +96,12 @@ Contributors
 * Automatically making new sections for different documents
 * Document sorting into different folders
 
-**Shivendra**
+**Shivendra**:
  * Update the ui according to the backend team's needs as they progress
  * Add the chatbot ui
  * Refactor the CSS for Dashboard
  
-**Saurav**
+**Saurav**:
 * Refining RAG for richer output
 * Connecting RAG to the frontend
 * Connecting the backend to the frontend
