@@ -47,7 +47,7 @@ Contributors
 * **Jira Task: Abheek - Build semantic search functionality**
    * KAN-51, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-51-build-semantic-search-functionali/)
 
-  Aaditya: "Setup backend with FastApi and build routes for login/register and dynamic page loading"
+  **Aaditya**: "Setup backend with FastApi and build routes for login/register and dynamic page loading"
 
 * **Jira Task: Aaditya - FastAPI Backend Project Setup**
    * KAN-24, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-24_flask_backend)
@@ -55,6 +55,27 @@ Contributors
    * KAN-23, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-23-make-the-api-endpoints-for-restfu)
 * **Jira Task: Aaditya - Login and Register Link**
    * KAN-51, [Bitbucket]()
+
+
+
+## Reports
+
+
+## Next Steps
+
+**Aaditya**: 
+
+* Storing documents into subfolders online
+* Automatically making new sections for different documents
+* Document sorting into different folders
+
+**Shivendra**
+
+**Saurav**
+
+**Abheek**:
+
+**Abhisek**
 
 
 List the ready features here:
@@ -106,7 +127,7 @@ Give credit here.
 
 
 ## Contact
-Created by [@flynerdpl](https://www.flynerd.pl/) - feel free to contact me!
+
 
 
 <!-- Optional -->
