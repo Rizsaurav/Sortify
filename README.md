@@ -80,7 +80,10 @@ Contributors
 * **Jira Task: Saurav - Enable user authentication in Supabase**
    * KAN-34, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-34-test-authentication-in-the-vite-app)
 
+ **Abhishek Verma Allamneni**: "Created a page to access user profile settings and update them"
 
+**Jira Task: Saurav - Created a page to access user profile settings**
+   * KAN-94, [Bitbucket][(https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/](https://bitbucket.org/%7B48ce9ca7-bb35-4613-92ee-029f8d0e4a21%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/pull-requests/5)
 
 
 ## Reports
