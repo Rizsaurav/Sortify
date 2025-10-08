@@ -56,6 +56,17 @@ Contributors
 * **Jira Task: Aaditya - Login and Register Link**
    * KAN-51, [Bitbucket]()
 
+  Shivendra: "Design and develop the dashboard and ui components of the landing page"
+
+* **Jira Task: Shivendra - Create a react app and setup the codebase**
+   * KAN-74, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-74-create-signup-form)
+* **Jira Task: Shivendra - Start with the ui components for the landing page**
+   * KAN-83, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-83-start-with-the-ui-components-for-)
+* **Jira Task: Shivendra - Design and implement dashboard design**
+   * KAN-89, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-89-design-and-implement-dashboard)
+* **Jira Task: Shivendra - Add responsiveness and test layout on different screen sizes**
+   * KAN-88, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-88-test-layout-on-different-screens)
+
 
 List the ready features here:
 - Document organization system, Feature name: Document Organizer, used by student 
