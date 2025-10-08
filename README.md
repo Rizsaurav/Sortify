@@ -97,6 +97,9 @@ Contributors
 **Shivendra**
 
 **Saurav**
+* Refining RAG for richer output
+* Connecting RAG to the frontend
+* Connecting the backend to the frontend
 
 **Abheek**:
 
@@ -109,10 +112,10 @@ List the ready features here:
 - Efficient Retrieval of data, Feature name: Document Retriever, used by student
 
 
-## Screenshots
+## Burnup Report:
 
 ![Alt text](https://drive.google.com/uc?export=view&id=1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA)
-
+![alt text](image.png)
 
 
 ## Setup
