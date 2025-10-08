@@ -67,7 +67,8 @@ Contributors
 * **Jira Task: Shivendra - Add responsiveness and test layout on different screen sizes**
    * KAN-88, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-88-test-layout-on-different-screens)
 
-   Saurav: "Setup Supabase database, Authentication pages and connected the databse to the upload form."
+   **Saurav**: "Setup Supabase database, Authentication pages and connected the database to the upload form"
+
 * **Jira Task: Saurav - Design and build user profiles table**
    * KAN-20, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-20-1.-design-and-build-file-upload-u)
 * **Jira Task: Saurav - Setup supabase and connect with React App**
@@ -76,7 +77,6 @@ Contributors
    * KAN-26, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-26-3.-connect-supabase-storage-to-th)
 * **Jira Task: Saurav - Enable user authentication in Supabase**
    * KAN-27, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-27-4-enable-user-authentication-in-supabase)
-
 * **Jira Task: Saurav - Enable user authentication in Supabase**
    * KAN-34, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-34-test-authentication-in-the-vite-app)
 
@@ -96,9 +96,9 @@ Contributors
 * Automatically making new sections for different documents
 * Document sorting into different folders
 
-**Shivendra**
+**Shivendra**:
 
-**Saurav**
+**Saurav**:
 * Refining RAG for richer output
 * Connecting RAG to the frontend
 * Connecting the backend to the frontend
