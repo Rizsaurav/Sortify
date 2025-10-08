@@ -108,6 +108,10 @@ Contributors
 
 **Abheek**:
 
+* Working on optimizing database queries
+* Optimizing the output of RAG model 
+* Effectively storing the embeddings 
+
 **Abhisek**
 
 
