@@ -3,6 +3,7 @@ import { Upload, Search, Clock, Star, Folder, FileText, Film, MoreHorizontal, Fi
 import { supabase } from '../../../../supabase/client';
 import { useProfile } from '../userProfiles/ProfileProviders';
 import { useNavigate } from 'react-router-dom';
+import ChatbotPopup from './ChatbotPopup.tsx';
 
 const DEMO_FILES = [
   { id: 'demo-1', name: 'Sample Assignment.pdf', type: 'application/pdf', size: '2.4 MB', modified: '2 hours ago', category: 'Assignments', created_at: new Date().toISOString() },
