@@ -55,3 +55,94 @@ class SmartSorter:
         max_categories: int = MAX_CATEGORIES_DEFAULT,
         use_gpu: bool = False
     ):
+        
+        """
+        Initialize SmartSorter.
+        Args:
+            supabase_url: Your Supabase project URL
+            supabase_key: Supabase service role or anon key
+            model_name: HuggingFace embedding model identifier
+            similarity_threshold: Min cosine similarity to match existing category (0-1)
+            min_cluster_size: Min documents required to form a cluster in DBSCAN
+            max_categories: Maximum auto-generated categories per user
+            use_gpu: Whether to use GPU acceleration (requires CUDA)
+        """
+        # Initialize Supabase client
+        self.supabase: Client = create_client(supabase_url, supabase_key)
+
+        # Load embedding model (Qwen3 officially works with sentence-transformers >=2.7.0/transformers >=4.51.0)
+        device = 'cuda' if use_gpu else 'cpu'
+        self.model = SentenceTransformer(model_name, device=device)
+        logger.info(f"Loaded model '{model_name}' on device '{device}'")
+
+        # Configuration
+        self.similarity_threshold = similarity_threshold
+        self.min_cluster_size = min_cluster_size
+        self.max_categories = max_categories
+
+        # In-memory cache
+        self.categories_cache: Dict[str, Dict[int, Category]] = {}  # user_id -> {cat_id: Category}
+        self.cache_timestamps: Dict[str, datetime] = {}  # user_id -> last_update_time
+
+        logger.info(f"SmartSorter initialized (threshold={similarity_threshold}, max_cats={max_categories})")
+
+    def _is_cache_valid(self, user_id: str) -> bool:
+        """Check if user's category cache is still valid."""
+        if user_id not in self.cache_timestamps:
+            return False
+        age = datetime.now() - self.cache_timestamps[user_id]
+        return age.total_seconds() < self.CACHE_TTL_SECONDS
+
+    def _invalidate_cache(self, user_id: str):
+        """Invalidate cache for a specific user."""
+        if user_id in self.cache_timestamps:
+            del self.cache_timestamps[user_id]
+
+    def generate_embedding(self, text: str, use_instruction: bool = True) -> np.ndarray:
+        """
+        Generate semantic embedding for document text.
+        Truncate for speed. Optionally uses instruction-tuning prompt.
+        """
+        text_preview = text[:512].strip()
+        if use_instruction:
+            task = "Given a document, classify it into a semantic category"
+            prompt = f"Instruct: {task}\nQuery: {text_preview}"
+        else:
+            prompt = text_preview
+        embedding = self.model.encode(
+            prompt,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            normalize_embeddings=True
+        )
+        return embedding
+    
+    def _load_categories_from_db(self, user_id: str) -> List[Category]:
+        """Load all categories for a user from Supabase, computing centroids if needed."""
+        try:
+            clusters_response = self.supabase.table('clusters').select('*').eq('user_id', user_id).execute()
+            if not clusters_response.data:
+                return []
+            categories = []
+            for cluster_row in clusters_response.data:
+                cluster_id = cluster_row['id']
+                docs_response = self.supabase.table('documents').select('embedding').eq('cluster_id', cluster_id).execute()
+                if docs_response.data and docs_response.data[0].get('embedding'):
+                    embeddings = [np.array(json.loads(doc['embedding'])) for doc in docs_response.data if doc.get('embedding')]
+                    centroid = np.mean(embeddings, axis=0) if embeddings else np.zeros(self.DEFAULT_EMBEDDING_DIM)
+                else:
+                    centroid = np.zeros(self.DEFAULT_EMBEDDING_DIM)
+                category = Category(
+                    id=cluster_id,
+                    label=cluster_row['label'],
+                    centroid=centroid,
+                    doc_count=len(docs_response.data),
+                    user_id=user_id,
+                    created_at=cluster_row['created_at']
+                )
+                categories.append(category)
+            logger.info(f"Loaded {len(categories)} categories for user {user_id}")
+            return categories
+        except Exception as e:
+            logger.error(f"Failed to load categories from DB: {e}")
+            return []
