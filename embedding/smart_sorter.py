@@ -34,3 +34,24 @@ class Category:
     user_id: str
     created_at: str
     updated_at: Optional[str] = None
+    
+
+
+class SmartSorter:
+    # Class constants
+    CACHE_TTL_SECONDS = 300  # 5 minutes
+    DEFAULT_EMBEDDING_DIM = 1024  # Qwen3-Embedding-0.6B dimension
+    KEYWORD_EXTRACTION_LENGTH = 200
+    SIMILARITY_THRESHOLD_DEFAULT = 0.75
+    MAX_CATEGORIES_DEFAULT = 50
+
+    def __init__(
+        self,
+        supabase_url: str,
+        supabase_key: str,
+        model_name: str = "Qwen/Qwen3-Embedding-0.6B",
+        similarity_threshold: float = SIMILARITY_THRESHOLD_DEFAULT,
+        min_cluster_size: int = 2,
+        max_categories: int = MAX_CATEGORIES_DEFAULT,
+        use_gpu: bool = False
+    ):
