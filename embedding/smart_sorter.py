@@ -146,3 +146,67 @@ class SmartSorter:
         except Exception as e:
             logger.error(f"Failed to load categories from DB: {e}")
             return []
+        
+    def _update_cache(self, user_id: str):
+        """Refresh category cache for a user."""
+        categories = self._load_categories_from_db(user_id)
+        self.categories_cache[user_id] = {cat.id: cat for cat in categories}
+        self.cache_timestamps[user_id] = datetime.now()
+
+    def _get_categories(self, user_id: str) -> Dict[int, Category]:
+        """Get categories for user (from cache if valid, otherwise refresh)."""
+        if not self._is_cache_valid(user_id):
+            self._update_cache(user_id)
+        return self.categories_cache.get(user_id, {})
+
+    def find_best_category(self, embedding: np.ndarray, user_id: str) -> Tuple[Optional[int], float]:
+        """Find the best matching category for a document embedding."""
+        categories = self._get_categories(user_id)
+        if not categories:
+            return None, 0.0
+        best_match_id, best_similarity = None, -1.0
+        for cat_id, category in categories.items():
+            similarity = cosine_similarity(
+                embedding.reshape(1, -1),
+                category.centroid.reshape(1, -1)
+            )[0][0]
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match_id = cat_id
+        return best_match_id, float(best_similarity)
+
+    def _extract_keywords(self, text: str, num_keywords: int = 3) -> List[str]:
+        """Extract meaningful keywords from text for category naming."""
+        stopwords = {'the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','as','is','was','are','been','be','have','has','had','do','does','did','will','would','could','should','may','might','must','can','this','that','these','those'}
+        text_preview = text[:self.KEYWORD_EXTRACTION_LENGTH].lower()
+        words = re.findall(r'\b[a-z]{3,}\b', text_preview)
+        filtered_words = [w for w in words if w not in stopwords]
+        if filtered_words:
+            word_counts = Counter(filtered_words)
+            keywords = [word for word,_ in word_counts.most_common(num_keywords)]
+            return keywords
+        return []
+
+    def generate_category_label(self, content: str, existing_labels: Set[str]) -> str:
+        """Generate a meaningful category label from document content."""
+        keywords = self._extract_keywords(content, num_keywords=3)
+        base_label = ' '.join(keywords).title() if keywords else f"Category {len(existing_labels)+1}"
+        label = base_label
+        counter = 1
+        while label in existing_labels:
+            label = f"{base_label} {counter}"
+            counter += 1
+        return label
+
+    def create_category(self, label: str, user_id: str) -> Optional[int]:
+        """Create a new category in the database."""
+        try:
+            response = self.supabase.table('clusters').insert({'label': label, 'user_id': user_id}).execute()
+            new_id = response.data[0]['id']
+            logger.info(f"Created category '{label}' (ID: {new_id}) for user {user_id}")
+            self._invalidate_cache(user_id)
+            return new_id
+        except Exception as e:
+            logger.error(f"Failed to create category '{label}': {e}")
+            return None
+
