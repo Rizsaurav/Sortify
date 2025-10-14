@@ -24,3 +24,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+@dataclass
+class Category:
+    id: int
+    label: str
+    centroid: np.ndarray
+    doc_count: int
+    user_id: str
+    created_at: str
+    updated_at: Optional[str] = None
