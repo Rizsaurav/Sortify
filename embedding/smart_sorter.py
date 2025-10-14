@@ -210,3 +210,172 @@ class SmartSorter:
             logger.error(f"Failed to create category '{label}': {e}")
             return None
 
+    def assign_document_to_category(
+        self,
+        doc_id: str,
+        category_id: int,
+        embedding: np.ndarray
+    ) -> bool:
+        """Update document with its category assignment and embedding."""
+        try:
+            self.supabase.table('documents').update({'cluster_id': category_id, 'embedding': embedding.tolist()}).eq('id', doc_id).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to assign doc {doc_id} to category {category_id}: {e}")
+            return False
+
+    def sort_document(
+        self,
+        doc_id: str,
+        content: str,
+        user_id: str,
+        user_category: Optional[str] = None
+    ) -> Dict:
+        """
+        Sort a single document into appropriate category.
+        Returns dict with status, timing, and metadata.
+        """
+        start_time = datetime.now()
+        try:
+            embedding = self.generate_embedding(content)
+            if user_category:
+                categories = self._get_categories(user_id)
+                existing_cat = next((cat for cat in categories.values() if cat.label == user_category), None)
+                if existing_cat:
+                    category_id = existing_cat.id
+                    assignment_type = 'user_existing'
+                else:
+                    category_id = self.create_category(user_category, user_id)
+                    assignment_type = 'user_new'
+            else:
+                best_match_id, similarity = self.find_best_category(embedding, user_id)
+                if similarity >= self.similarity_threshold and best_match_id:
+                    category_id = best_match_id
+                    assignment_type = 'auto_existing'
+                else:
+                    categories = self._get_categories(user_id)
+                    if len(categories) < self.max_categories:
+                        existing_labels = {cat.label for cat in categories.values()}
+                        new_label = self.generate_category_label(content, existing_labels)
+                        category_id = self.create_category(new_label, user_id)
+                        assignment_type = 'auto_new'
+                    else:
+                        category_id = best_match_id
+                        assignment_type = 'auto_forced'
+                        logger.warning(f"Max categories reached for user {user_id}, forcing assignment")
+            success = self.assign_document_to_category(doc_id, category_id, embedding) if category_id else False
+            elapsed = (datetime.now() - start_time).total_seconds()
+            return {
+                'success': success,
+                'doc_id': doc_id,
+                'category_id': category_id,
+                'assignment_type': assignment_type,
+                'processing_time_seconds': round(elapsed, 3),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Error sorting document {doc_id}: {e}")
+            elapsed = (datetime.now() - start_time).total_seconds()
+            return {
+                'success': False,
+                'doc_id': doc_id,
+                'error': str(e),
+                'processing_time_seconds': round(elapsed, 3),
+                'timestamp': datetime.now().isoformat()
+            }
+
+    async def sort_documents_batch(
+        self,
+        documents: List[Dict[str, str]],
+        user_id: str
+    ) -> List[Dict]:
+        """
+        Sort multiple documents in batch (parallel processing, async-safe).
+        Args:
+            documents: List of {'id': doc_id, 'content': text} dicts
+            user_id: User UUID
+        Returns:
+            List of sorting results
+        """
+        import asyncio
+        loop = asyncio.get_event_loop()
+        tasks = [
+            loop.run_in_executor(None, self.sort_document, doc['id'], doc['content'], user_id)
+            for doc in documents
+        ]
+        results = await asyncio.gather(*tasks)
+        return results
+    
+    def recluster_all_documents(
+        self,
+        user_id: str,
+        eps: float = 0.3,
+        delete_old_categories: bool = True
+    ) -> Dict:
+        """
+        Re-cluster all documents for a user using DBSCAN.
+        Handles cluster/category cleanup and assignment.
+        """
+        logger.info(f"Starting re-clustering for user {user_id}")
+        start_time = datetime.now()
+        try:
+            docs_response = self.supabase.table('documents').select('id, content, embedding').eq('metadata->>user_id', user_id).execute()
+            if not docs_response.data:
+                return {
+                    'success': False,
+                    'message': 'No documents found for user',
+                    'user_id': user_id
+                }
+            doc_ids, embeddings = [], []
+            for doc in docs_response.data:
+                doc_ids.append(doc['id'])
+                if doc.get('embedding'):
+                    emb = np.array(json.loads(doc['embedding']))
+                else:
+                    emb = self.generate_embedding(doc['content'])
+                embeddings.append(emb)
+            embeddings = np.array(embeddings)
+            clusterer = DBSCAN(
+                eps=eps,
+                min_samples=self.min_cluster_size,
+                metric='cosine'
+            )
+            cluster_labels = clusterer.fit_predict(embeddings)
+            if delete_old_categories:
+                self.supabase.table('clusters').delete().eq('user_id', user_id).execute()
+            unique_labels = set(cluster_labels)
+            category_mapping = {}
+            for label_id in unique_labels:
+                if label_id == -1:
+                    cat_label = "Uncategorized"
+                else:
+                    cluster_indices = np.where(cluster_labels == label_id)[0]
+                    sample_content = docs_response.data[cluster_indices[0]]['content']
+                    existing_labels = set(category_mapping.values())
+                    cat_label = self.generate_category_label(sample_content, existing_labels)
+                new_cat_id = self.create_category(cat_label, user_id)
+                category_mapping[label_id] = new_cat_id
+            for doc_id, label_id in zip(doc_ids, cluster_labels):
+                cat_id = category_mapping[label_id]
+                idx = doc_ids.index(doc_id)
+                self.assign_document_to_category(doc_id, cat_id, embeddings[idx])
+            self._invalidate_cache(user_id)
+            elapsed = (datetime.now() - start_time).total_seconds()
+            return {
+                'success': True,
+                'user_id': user_id,
+                'documents_processed': len(doc_ids),
+                'categories_created': len(unique_labels),
+                'outliers': int(np.sum(cluster_labels == -1)),
+                'processing_time_seconds': round(elapsed, 2),
+                'timestamp': datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Re-clustering failed for user {user_id}: {e}")
+            return {
+                'success': False,
+                'user_id': user_id,
+                'error': str(e)
+            }
+            
+    
