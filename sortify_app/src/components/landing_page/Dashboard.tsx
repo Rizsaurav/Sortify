@@ -392,34 +392,28 @@ export default function Dashboard() {
 
       if (storageError) throw storageError;
 
-      const content = await extractTextFromFile(file);
-
-      const { data: docData, error: docError } = await supabase
-        .from('documents')
-        .insert({
-          content: content,
-          embedding: null,
-          metadata: {
-            user_id: user.id,
-            filename: file.name,
-            type: file.type || fileExt,
-            size: formatFileSize(file.size),
-            category: detectCategory(file.name),
-            storage_path: storageData.path,
-            view_count: 0
-          },
-          cluster_id: null
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
-
+      // Send to backend for processing with SmartSorter
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', user.id);
+      
+      const response = await fetch('http://localhost:8000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+  
+      if (!response.ok) {
+        throw new Error('Backend upload failed');
+      }
+  
       setNotification(`✓ ${file.name} uploaded successfully!`);
       setTimeout(() => setNotification(null), 3000);
-
-      await loadAllUserDocuments();
-
+  
+      // Wait a bit for backend to process, then reload
+      setTimeout(async () => {
+        await loadAllUserDocuments();
+      }, 2000);
+  
     } catch (error: any) {
       console.error('Upload error:', error);
       setNotification(`✗ Upload failed: ${error.message}`);
