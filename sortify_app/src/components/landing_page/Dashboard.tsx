@@ -4,6 +4,8 @@ import { supabase } from '../../../../supabase/client';
 import { useProfile } from '../userProfiles/ProfileProviders';
 import { useNavigate } from 'react-router-dom';
 import ChatbotPopup from './ChatbotPopup.tsx';
+import { sortDocument } from "../../api/sorter"
+
 
 const DEMO_FILES = [
   { id: 'demo-1', name: 'Sample Assignment.pdf', type: 'application/pdf', size: '2.4 MB', modified: '2 hours ago', category: 'Assignments', created_at: new Date().toISOString() },
@@ -85,6 +87,11 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -612,6 +619,50 @@ export default function Dashboard() {
     setPreviewUrl(null);
     setPreviewContent(null);
     setPreviewType('none');
+  };
+
+  const handleRAGSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setNotification('Please log in to search');
+        return;
+      }
+      
+      // Call your backend RAG search
+      const formData = new FormData();
+      formData.append('question', searchQuery);
+      formData.append('user_id', user.id);
+      formData.append('top_k', '5');
+      
+      const response = await fetch('http://localhost:8000/ask_supabase', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) throw new Error('Search failed');
+      
+      const result = await response.json();
+      setSearchResults(result);
+      
+      // Show results (you can create a modal or section to display them)
+      console.log('Answer:', result.answer);
+      console.log('Sources:', result.sources);
+      
+      setNotification(`Found ${result.sources.length} relevant documents!`);
+      setTimeout(() => setNotification(null), 3000);
+      
+    } catch (error: any) {
+      console.error('Search error:', error);
+      setNotification(`Search failed: ${error.message}`);
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
 // Check guest mode at render level
