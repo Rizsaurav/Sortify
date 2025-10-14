@@ -1146,6 +1146,16 @@ if (!isAuthenticated && !isGuest) {
                   </div>
                 </div>
               </div>
+              return (
+              <div className={darkMode ? 'dark' : ''}>
+                <div className="min-h-screen bg-background">
+                  {/* ... all your existing code ... */}
+                  
+                  {/* Add this line before the closing divs */}
+                  <ChatbotPopup />
+                </div>
+              </div>
+            );
             </main>
           </div>
         </div>
