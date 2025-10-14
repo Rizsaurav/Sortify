@@ -923,20 +923,35 @@ if (!isAuthenticated && !isGuest) {
                     )}
                   </label>
                 </div>
-
-                <div className="relative">
+                                {/* Search Bar with RAG */}
+                                <div className="relative">
                   <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input 
-                    placeholder="Search through your documents, assignments, and notes..." 
+                  <input
+                    placeholder="Ask a question about your documents..."
                     className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-primary outline-none transition-all shadow-sm"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRAGSearch();
+                      }
+                    }}
                   />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
-                    <Sparkles className="h-4 w-4" />
+                  <button 
+                    onClick={handleRAGSearch}
+                    disabled={!searchQuery.trim() || isSearching}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium disabled:opacity-50"
+                  >
+                    {isSearching ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
                     AI Search
                   </button>
                 </div>
+
+
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors">
