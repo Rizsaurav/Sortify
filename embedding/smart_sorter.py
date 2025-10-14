@@ -378,4 +378,64 @@ class SmartSorter:
                 'error': str(e)
             }
             
+def sort_document_background(
+    sorter: SmartSorter,
+    doc_id: str,
+    content: str,
+    user_id: str,
+    user_category: Optional[str] = None
+) -> Dict:
+    """
+    Wrapper function for use in FastAPI background tasks.
+    """
+    return sorter.sort_document(doc_id, content, user_id, user_category)
+
+if __name__ == "__main__":
+    import sys
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
+    if not supabase_url or not supabase_key:
+        print("ERROR: Set SUPABASE_URL and SUPABASE_KEY environment variables")
+        sys.exit(1)
+    print("\n" + "="*70)
+    print("SmartSorter - Test Suite")
+    print("="*70 + "\n")
+    sorter = SmartSorter(
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
+        model_name="Qwen/Qwen3-Embedding-0.6B",
+        similarity_threshold=0.75,
+        max_categories=50
+    )
+    print("\n[TEST 1] Sorting single document...")
+    result = sorter.sort_document(
+        doc_id="test-doc-001",
+        content="Machine learning and artificial intelligence algorithms for data analysis",
+        user_id="test-user-001"
+    )
+    print(f"Result: {json.dumps(result, indent=2)}")
+    print("\n[TEST 2] Sorting with user-defined category...")
+    result = sorter.sort_document(
+        doc_id="test-doc-002",
+        content="Python programming tutorial for beginners",
+        user_id="test-user-001",
+        user_category="Programming Tutorials"
+    )
+    print(f"Result: {json.dumps(result, indent=2)}")
+    print("\n[TEST 3] Batch sorting multiple documents...")
+    test_docs = [
+        {"id": "batch-1", "content": "Deep learning neural networks and backpropagation"},
+        {"id": "batch-2", "content": "JavaScript web development and React framework"},
+        {"id": "batch-3", "content": "Database design with PostgreSQL and SQL queries"}
+    ]
+    import asyncio
+    results = asyncio.run(sorter.sort_documents_batch(test_docs, "test-user-001"))
+    print(f"Processed {len(results)} documents")
+    for r in results:
+        print(f"  - {r['doc_id']}: {r['assignment_type']} in {r['processing_time_seconds']}s")
+    print("\n" + "="*70)
+    print("All tests completed successfully!")
+    print("="*70 + "\n")
+
+            
     
