@@ -3,6 +3,9 @@ import { Upload, Search, Clock, Star, Folder, FileText, Film, MoreHorizontal, Fi
 import { supabase } from '../../../../supabase/client';
 import { useProfile } from '../userProfiles/ProfileProviders';
 import { useNavigate } from 'react-router-dom';
+import ChatbotPopup from './ChatbotPopup.tsx';
+import { sortDocument } from "../../api/sorter"
+
 
 const DEMO_FILES = [
   { id: 'demo-1', name: 'Sample Assignment.pdf', type: 'application/pdf', size: '2.4 MB', modified: '2 hours ago', category: 'Assignments', created_at: new Date().toISOString() },
@@ -84,6 +87,11 @@ export default function Dashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -392,34 +400,28 @@ export default function Dashboard() {
 
       if (storageError) throw storageError;
 
-      const content = await extractTextFromFile(file);
-
-      const { data: docData, error: docError } = await supabase
-        .from('documents')
-        .insert({
-          content: content,
-          embedding: null,
-          metadata: {
-            user_id: user.id,
-            filename: file.name,
-            type: file.type || fileExt,
-            size: formatFileSize(file.size),
-            category: detectCategory(file.name),
-            storage_path: storageData.path,
-            view_count: 0
-          },
-          cluster_id: null
-        })
-        .select()
-        .single();
-
-      if (docError) throw docError;
-
+      // Send to backend for processing with SmartSorter
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('user_id', user.id);
+      
+      const response = await fetch('http://localhost:8000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+  
+      if (!response.ok) {
+        throw new Error('Backend upload failed');
+      }
+  
       setNotification(`✓ ${file.name} uploaded successfully!`);
       setTimeout(() => setNotification(null), 3000);
-
-      await loadAllUserDocuments();
-
+  
+      // Wait a bit for backend to process, then reload
+      setTimeout(async () => {
+        await loadAllUserDocuments();
+      }, 2000);
+  
     } catch (error: any) {
       console.error('Upload error:', error);
       setNotification(`✗ Upload failed: ${error.message}`);
@@ -617,6 +619,50 @@ export default function Dashboard() {
     setPreviewUrl(null);
     setPreviewContent(null);
     setPreviewType('none');
+  };
+
+  const handleRAGSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setNotification('Please log in to search');
+        return;
+      }
+      
+      // Call your backend RAG search
+      const formData = new FormData();
+      formData.append('question', searchQuery);
+      formData.append('user_id', user.id);
+      formData.append('top_k', '5');
+      
+      const response = await fetch('http://localhost:8000/ask_supabase', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) throw new Error('Search failed');
+      
+      const result = await response.json();
+      setSearchResults(result);
+      
+      // Show results (you can create a modal or section to display them)
+      console.log('Answer:', result.answer);
+      console.log('Sources:', result.sources);
+      
+      setNotification(`Found ${result.sources.length} relevant documents!`);
+      setTimeout(() => setNotification(null), 3000);
+      
+    } catch (error: any) {
+      console.error('Search error:', error);
+      setNotification(`Search failed: ${error.message}`);
+      setTimeout(() => setNotification(null), 3000);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
 // Check guest mode at render level
@@ -877,20 +923,35 @@ if (!isAuthenticated && !isGuest) {
                     )}
                   </label>
                 </div>
-
-                <div className="relative">
+                                {/* Search Bar with RAG */}
+                                <div className="relative">
                   <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input 
-                    placeholder="Search through your documents, assignments, and notes..." 
+                  <input
+                    placeholder="Ask a question about your documents..."
                     className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-primary outline-none transition-all shadow-sm"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRAGSearch();
+                      }
+                    }}
                   />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
-                    <Sparkles className="h-4 w-4" />
+                  <button 
+                    onClick={handleRAGSearch}
+                    disabled={!searchQuery.trim() || isSearching}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium disabled:opacity-50"
+                  >
+                    {isSearching ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
                     AI Search
                   </button>
                 </div>
+
+
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors">
@@ -1145,6 +1206,16 @@ if (!isAuthenticated && !isGuest) {
                   </div>
                 </div>
               </div>
+              return (
+              <div className={darkMode ? 'dark' : ''}>
+                <div className="min-h-screen bg-background">
+                  {/* ... all your existing code ... */}
+                  
+                  {/* Add this line before the closing divs */}
+                  <ChatbotPopup />
+                </div>
+              </div>
+            );
             </main>
           </div>
         </div>
