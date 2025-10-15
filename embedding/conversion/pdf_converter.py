@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 PDF to text conversion utility for the RAG system.
+Improved with better error handling and caching logic.
 """
 
 import logging
@@ -49,23 +50,35 @@ class PDFConverter:
         return hash_md5.hexdigest()
     
     def _is_pdf_changed(self, pdf_path: Path, text_path: Path) -> bool:
-        """Check if PDF has changed since last conversion."""
-        hash_file = self.cache_dir / f"{pdf_path.stem}.hash"
-        
-        # If text file doesn't exist, PDF needs conversion
+        """
+        Check if PDF needs conversion.
+        Returns True if conversion is needed, False otherwise.
+        """
+        # CRITICAL: If output text file doesn't exist, always convert
         if not text_path.exists():
+            logger.debug(f"Text file missing for {pdf_path.name}, conversion needed")
             return True
         
-        # If hash file doesn't exist, PDF needs conversion
+        # If hash file doesn't exist, needs conversion
+        hash_file = self.cache_dir / f"{pdf_path.stem}.hash"
         if not hash_file.exists():
+            logger.debug(f"Hash file missing for {pdf_path.name}, conversion needed")
             return True
         
         # Compare current hash with cached hash
-        current_hash = self._get_pdf_hash(pdf_path)
-        with open(hash_file, 'r') as f:
-            cached_hash = f.read().strip()
-        
-        return current_hash != cached_hash
+        try:
+            current_hash = self._get_pdf_hash(pdf_path)
+            with open(hash_file, 'r') as f:
+                cached_hash = f.read().strip()
+            
+            changed = current_hash != cached_hash
+            if changed:
+                logger.debug(f"PDF hash changed for {pdf_path.name}, conversion needed")
+            return changed
+            
+        except Exception as e:
+            logger.warning(f"Error checking hash for {pdf_path.name}: {e}")
+            return True  # On error, reconvert to be safe
     
     def _save_pdf_hash(self, pdf_path: Path):
         """Save hash of PDF file for change detection."""
@@ -73,6 +86,15 @@ class PDFConverter:
         current_hash = self._get_pdf_hash(pdf_path)
         with open(hash_file, 'w') as f:
             f.write(current_hash)
+    
+    def _verify_output_exists(self, pdf_path: Path) -> bool:
+        """Verify that both output and cache files exist."""
+        text_filename = f"{pdf_path.stem}.txt"
+        output_path = self.output_dir / text_filename
+        cache_path = self.cache_dir / text_filename
+        hash_path = self.cache_dir / f"{pdf_path.stem}.hash"
+        
+        return output_path.exists() and cache_path.exists() and hash_path.exists()
     
     def convert_pdf(self, pdf_path: Path, force: bool = False) -> Optional[Path]:
         """
@@ -99,8 +121,12 @@ class PDFConverter:
         
         # Check if conversion is needed
         if not force and not self._is_pdf_changed(pdf_path, text_path):
-            logger.info(f"📄 {pdf_path.name} -> {text_filename} (unchanged, skipping)")
-            return text_path
+            # Verify the file actually exists before skipping
+            if text_path.exists():
+                logger.info(f"⏭️  {pdf_path.name} (unchanged)")
+                return text_path
+            else:
+                logger.warning(f"⚠️  {pdf_path.name} was cached but output missing, reconverting...")
         
         try:
             # Read PDF
@@ -110,9 +136,12 @@ class PDFConverter:
             # Extract text from all pages
             text_content = []
             for i, page in enumerate(reader.pages):
-                page_text = page.extract_text()
-                if page_text:
-                    text_content.append(page_text)
+                try:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_content.append(page_text)
+                except Exception as e:
+                    logger.warning(f"Error extracting page {i+1} from {pdf_path.name}: {e}")
             
             # Combine all pages
             full_text = "\n\n".join(text_content)
@@ -140,6 +169,8 @@ class PDFConverter:
             
         except Exception as e:
             logger.error(f"❌ Error converting {pdf_path.name}: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
             return None
     
     def convert_all_pdfs(self, force: bool = False) -> Dict[str, any]:
@@ -164,6 +195,7 @@ class PDFConverter:
         
         if not self.pdf_dir.exists():
             logger.warning(f"PDF directory not found: {self.pdf_dir}")
+            self.pdf_dir.mkdir(parents=True, exist_ok=True)
             return {
                 'total': 0,
                 'converted': 0,
@@ -198,14 +230,16 @@ class PDFConverter:
             
             # Check if needs conversion
             if not force and not self._is_pdf_changed(pdf_path, text_path):
-                stats['skipped'] += 1
-                stats['files'].append({
-                    'name': pdf_path.name,
-                    'status': 'skipped',
-                    'output': str(text_path)
-                })
-                logger.info(f"⏭️  {pdf_path.name} (unchanged)")
-                continue
+                # Double-check the file actually exists
+                if text_path.exists():
+                    stats['skipped'] += 1
+                    stats['files'].append({
+                        'name': pdf_path.name,
+                        'status': 'skipped',
+                        'output': str(text_path)
+                    })
+                    logger.info(f"⏭️  {pdf_path.name} (unchanged)")
+                    continue
             
             # Convert PDF
             result_path = self.convert_pdf(pdf_path, force=force)
@@ -238,17 +272,46 @@ class PDFConverter:
         for pdf_path in pdf_files:
             text_path = self.output_dir / f"{pdf_path.stem}.txt"
             cache_path = self.cache_dir / f"{pdf_path.stem}.txt"
+            hash_path = self.cache_dir / f"{pdf_path.stem}.hash"
             
             result.append({
                 'pdf_name': pdf_path.name,
                 'pdf_path': str(pdf_path),
                 'text_exists': text_path.exists(),
+                'cache_exists': cache_path.exists(),
+                'hash_exists': hash_path.exists(),
                 'text_path': str(text_path) if text_path.exists() else None,
-                'is_converted': cache_path.exists(),
+                'is_converted': self._verify_output_exists(pdf_path),
                 'needs_update': self._is_pdf_changed(pdf_path, text_path) if PDF_SUPPORT else False
             })
         
         return result
+    
+    def clean_orphaned_files(self):
+        """Remove cache/output files for PDFs that no longer exist."""
+        if not self.pdf_dir.exists():
+            return
+        
+        pdf_stems = set()
+        for pdf_path in list(self.pdf_dir.glob("*.pdf")) + list(self.pdf_dir.glob("*.PDF")):
+            pdf_stems.add(pdf_path.stem)
+        
+        # Clean cache directory
+        if self.cache_dir.exists():
+            for file in self.cache_dir.glob("*"):
+                if file.stem not in pdf_stems:
+                    logger.info(f"🗑️  Removing orphaned cache file: {file.name}")
+                    file.unlink()
+        
+        # Clean output directory (only .txt files that match PDF naming pattern)
+        if self.output_dir.exists():
+            for file in self.output_dir.glob("*.txt"):
+                if file.stem not in pdf_stems:
+                    # Check if this might be a PDF-derived file
+                    cache_hash = self.cache_dir / f"{file.stem}.hash"
+                    if cache_hash.exists():
+                        logger.info(f"🗑️  Removing orphaned output file: {file.name}")
+                        file.unlink()
 
 
 def main():
@@ -262,8 +325,13 @@ def main():
     parser.add_argument('--force', action='store_true', help='Force conversion of all PDFs')
     parser.add_argument('--list', action='store_true', help='List all PDFs and their status')
     parser.add_argument('--file', type=str, help='Convert a specific PDF file')
+    parser.add_argument('--clean', action='store_true', help='Clean orphaned cache files')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose logging')
     
     args = parser.parse_args()
+    
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
     
     converter = PDFConverter(
         pdf_dir=args.pdf_dir,
@@ -271,7 +339,12 @@ def main():
         output_dir=args.output_dir
     )
     
-    if args.list:
+    if args.clean:
+        print("🗑️  Cleaning orphaned files...")
+        converter.clean_orphaned_files()
+        print("✅ Cleanup complete")
+    
+    elif args.list:
         pdfs = converter.list_pdfs()
         if not pdfs:
             print("No PDF files found")
@@ -281,8 +354,8 @@ def main():
                 status = "✅ Converted" if pdf_info['is_converted'] else "❌ Not converted"
                 needs_update = " (needs update)" if pdf_info['needs_update'] else ""
                 print(f"  {pdf_info['pdf_name']}: {status}{needs_update}")
-                if pdf_info['text_path']:
-                    print(f"    → {pdf_info['text_path']}")
+                print(f"    Output: {pdf_info['text_path'] or 'N/A'}")
+                print(f"    Cache: {'✓' if pdf_info['cache_exists'] else '✗'} | Hash: {'✓' if pdf_info['hash_exists'] else '✗'}")
     
     elif args.file:
         pdf_path = Path(args.file)
