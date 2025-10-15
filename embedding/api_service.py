@@ -3,12 +3,20 @@
 FastAPI service for RAG system integration with frontend and Supabase.
 Provides RESTful endpoints for document processing and question answering.
 """
-
+import os
 import asyncio
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 from pathlib import Path
+from smart_sorter import SmartSorter
+from supabase import create_client, Client
+import io
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import google.generativeai as genai
+
+
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,11 +26,19 @@ import uvicorn
 from config import RAGConfig
 from rag_system import FastRAG, SearchResult
 from document_manager import DocumentManager
-from conversion.pdf_converter import PDFConverter
+from fastapi import Form
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize SmartSorter (adjust env vars/config as needed)
+sorter = SmartSorter(
+supabase_url=os.getenv("SUPABASE_URL"),
+supabase_key=os.getenv("SUPABASE_KEY"),
+model_name="Qwen/Qwen3-Embedding-0.6B"
+)
 
 # Pydantic models for API
 class QuestionRequest(BaseModel):
@@ -86,34 +102,27 @@ class RAGService:
         self.config = config or RAGConfig.from_env()
         self.rag = FastRAG(self.config)
         self.doc_manager = DocumentManager(self.config.documents_dir)
-        self.pdf_converter = PDFConverter(
-            pdf_dir="./pdf",
-            cache_dir="./storage/pdf_cache",
-            output_dir=self.config.documents_dir
-        )
+        self.is_ready = False
+        self.processing_stats = None
+
+        
+        # Add Supabase client
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_KEY")
+        self.supabase = create_client(supabase_url, supabase_key)
+        
         self.is_ready = False
         self.processing_stats = None
         
     async def initialize(self) -> ProcessingStatus:
         """Initialize the RAG system asynchronously."""
         try:
-            # Convert PDFs first
-            logger.info("Converting PDF files...")
-            loop = asyncio.get_event_loop()
-            pdf_stats = await loop.run_in_executor(
-                None,
-                self.pdf_converter.convert_all_pdfs
-            )
-            
-            if pdf_stats['total'] > 0:
-                logger.info(f"PDF Conversion: {pdf_stats['converted']} converted, {pdf_stats['skipped']} skipped, {pdf_stats['failed']} failed")
-            
             # Run document processing in thread pool
+            loop = asyncio.get_event_loop()
             stats = await loop.run_in_executor(
                 None, 
-                self.rag.process_documents
-            )
-            
+                self.rag.process_documents)
+                  
             self.is_ready = stats['ready']
             self.processing_stats = stats
             
@@ -137,6 +146,10 @@ class RAGService:
                 timestamp=datetime.now()
             )
     
+    def sort_document_background(doc_id: str, content: str, user_id: str):
+        """Background task to categorize and embed a document using SmartSorter."""
+        sorter.sort_document(doc_id, content, user_id)
+
     async def ask_question(self, request: QuestionRequest) -> QuestionResponse:
         """Answer a question using the RAG system."""
         if not self.is_ready:
@@ -284,71 +297,199 @@ async def search_documents(request: SearchRequest):
     """Search for similar document chunks."""
     return await rag_service.search_documents(request)
 
+def sort_document_background(doc_id: str, content: str, user_id: str):
+    sorter.sort_document(doc_id, content, user_id)
+
+@app.post("/ask_supabase")
+async def ask_from_supabase(
+    question: str = Form(...),
+    user_id: str = Form(...),
+    top_k: int = Form(5)
+):
+    """Answer questions using Supabase docs + FastRAG's Gemini model for NLG."""
+    try:
+        import time
+        import json
+
+        start_time = time.time()
+
+        # 1) Rank Supabase docs by semantic similarity (using SmartSorter embedder)
+        question_embedding = sorter.generate_embedding(question, use_instruction=True)
+
+        resp = rag_service.supabase.table('documents').select(
+            'id, content, metadata, embedding'
+        ).eq('metadata->>user_id', user_id).execute()
+
+        if not resp.data:
+            return {
+                'answer': "No documents found. Please upload some documents first.",
+                'sources': [],
+                'chunks_used': 0,
+                'response_time': time.time() - start_time
+            }
+
+        # 2) Compute cosine similarity in Python, parsing embeddings as needed
+        results = []
+        for doc in resp.data:
+            embedding_raw = doc.get('embedding')
+            content = (doc.get('content') or "").strip()
+            if not embedding_raw or not content:
+                continue
+
+            # Parse string embeddings (pgvector sometimes serialized as JSON strings)
+            if isinstance(embedding_raw, str):
+                try:
+                    embedding_raw = json.loads(embedding_raw)
+                except Exception:
+                    continue
+
+            doc_vec = np.array(embedding_raw, dtype=np.float32)
+            q_vec = question_embedding.astype(np.float32)
+
+            # Cosine similarity
+            denom = (np.linalg.norm(q_vec) * np.linalg.norm(doc_vec)) or 1e-8
+            sim = float(np.dot(q_vec, doc_vec) / denom)
+
+            # Keep moderately relevant docs
+            if sim > 0.30:
+                results.append({
+                    "filename": doc["metadata"].get("filename", "Unknown"),
+                    "content": content,
+                    "similarity": sim
+                })
+
+        # 3) Take top_k by similarity
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        results = results[:top_k]
+
+        if not results:
+            return {
+                'answer': f"I couldn't find documents relevant to: '{question}'. Try different wording or upload more documents.",
+                'sources': [],
+                'chunks_used': 0,
+                'response_time': time.time() - start_time
+            }
+
+        # 4) Build RAG context and prompt
+        sources = [r["filename"] for r in results]
+        context_blocks = [
+            f"Document {i+1} ({r['filename']}, relevance {r['similarity']*100:.1f}%):\n{r['content'][:1200]}"
+            for i, r in enumerate(results)
+        ]
+        context = "\n\n---\n\n".join(context_blocks)
+
+        prompt = f"""You are a helpful study assistant. Answer the question based ONLY on the documents below.
+If the documents do not contain enough information, say so clearly.
+
+Documents:
+{context}
+
+Question: {question}
+
+Instructions:
+- Provide a clear, concise answer.
+- Cite documents by their file name in-line where relevant.
+- If multiple documents are relevant, synthesize them and cite each used source."""
+
+        # 5) Use the SAME Gemini model FastRAG already configured
+        model = rag_service.rag.llm_model
+        llm_resp = model.generate_content(prompt)
+
+        # Extract text safely
+        if hasattr(llm_resp, "text") and llm_resp.text:
+            answer = llm_resp.text
+        elif getattr(llm_resp, "candidates", None):
+            answer = llm_resp.candidates[0].content.parts[0].text
+        else:
+            answer = "I could not generate an answer from the provided documents."
+
+        return {
+            "answer": answer,
+            "sources": list(dict.fromkeys(sources)),
+            "chunks_used": len(results),
+            "response_time": time.time() - start_time
+        }
+
+    except Exception as e:
+        logger.error(f"Error in ask_supabase: {e}", exc_info=True)
+        return {
+            "answer": f"Sorry, I encountered an error: {str(e)}",
+            "sources": [],
+            "chunks_used": 0,
+            "response_time": 0
+        }
+
+
 @app.post("/upload", response_model=DocumentUploadResponse)
 async def upload_document(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
 ):
-    """Upload a new document (supports .txt and .pdf files)."""
     try:
-        filename = file.filename.lower()
+        # Read content ONCE
+        content_bytes = await file.read()
         
-        # Handle PDF files
-        if filename.endswith('.pdf'):
-            # Save to pdf directory
-            pdf_dir = Path("./pdf")
-            pdf_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Clean filename
-            clean_filename = "".join(c for c in file.filename if c.isalnum() or c in ".-_")
-            pdf_path = pdf_dir / clean_filename
-            
-            # Save PDF
-            import shutil
-            with open(pdf_path, "wb") as f:
-                shutil.copyfileobj(file.file, f)
-            
-            # Convert PDF to text
-            logger.info(f"Converting uploaded PDF: {clean_filename}")
-            loop = asyncio.get_event_loop()
-            text_path = await loop.run_in_executor(
-                None,
-                rag_service.pdf_converter.convert_pdf,
-                pdf_path,
-                True  # Force conversion
-            )
-            
-            if text_path:
-                message = f"PDF uploaded and converted successfully to {text_path.name}. Processing in background."
-            else:
-                message = "PDF uploaded but conversion failed. Please check the file."
+        # Save file (create temp file from bytes if needed)
+        await file.seek(0)  # Reset file pointer
+        file_path = rag_service.doc_manager.save_uploaded_file(file)
         
-        # Handle text files
-        elif filename.endswith('.txt'):
-            file_path = rag_service.doc_manager.save_uploaded_file(file)
-            message = "Text document uploaded successfully. Processing in background."
+        # Extract content based on type
+        if file.content_type and file.content_type.startswith('text/'):
+            content_str = content_bytes.decode("utf-8", errors="ignore")
+        
+        elif file.content_type == 'application/pdf':
+            # Extract PDF text
+            try:
+                from pypdf import PdfReader
+                import io
+                pdf_file = io.BytesIO(content_bytes)  # Now content_bytes has data
+                reader = PdfReader(pdf_file)
+                text_pages = [page.extract_text() for page in reader.pages if page.extract_text()]
+                content_str = "\n\n".join(text_pages)
+                if not content_str.strip():
+                    content_str = f"PDF: {file.filename} (no extractable text)"
+                logger.info(f"Extracted {len(content_str)} chars from PDF")
+            except Exception as e:
+                logger.error(f"PDF extraction failed: {e}")
+                content_str = f"PDF: {file.filename} (extraction failed: {str(e)})"
+        
+        elif file.content_type and file.content_type.startswith('image/'):
+            content_str = f"Image: {file.filename}\nType: {file.content_type}\nSize: {len(content_bytes)} bytes"
         
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file type. Please upload .txt or .pdf files."
-            )
+            content_str = f"File: {file.filename}\nType: {file.content_type or 'unknown'}"
         
-        # Schedule reprocessing in background
-        background_tasks.add_task(reprocess_documents)
+        # Insert to Supabase
+        insert_response = rag_service.supabase.table('documents').insert({
+            'content': content_str,
+            'metadata': {
+                'user_id': user_id,
+                'filename': file.filename,
+                'type': file.content_type,
+                'size': len(content_bytes)
+            },
+            'embedding': None,
+            'cluster_id': None
+        }).execute()
+        
+        doc_id = insert_response.data[0]['id']
+        
+        # Trigger SmartSorter
+        background_tasks.add_task(sort_document_background, doc_id, content_str, user_id)
         
         return DocumentUploadResponse(
             filename=file.filename,
             status="uploaded",
-            message=message,
+            message=f"Document uploaded with ID {doc_id}. Categorization in progress.",
             timestamp=datetime.now()
         )
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error uploading document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post("/reprocess")
 async def trigger_reprocessing():
