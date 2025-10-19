@@ -7,7 +7,7 @@ import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import Dashboard from "./components/landing_page/Dashboard"
 import {ProfileProvider} from "./components/userProfiles/ProfileProviders"
-
+import settingspage from "./components/settings_page/settingspage"
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -43,6 +43,7 @@ function App() {
       ? <Dashboard />
       : <Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
+        <Route path="/settings" element={<settingspage />} />
       </Routes>
       </ProfileProvider>
     </Router>
