@@ -8,7 +8,7 @@ import { LoginForm } from "./components/Auth/forms/LogInForm"
 import Dashboard from "./components/landing_page/Dashboard"
 import AccountDetails from "./components/userprofilepage/AccountDetails"
 import { DashboardLayout } from "./components/landing_page/dashboard_layout"
-
+import { ProfileProvider } from "./components/userProfiles/ProfileProviders";
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
