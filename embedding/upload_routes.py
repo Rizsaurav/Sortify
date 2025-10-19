@@ -135,3 +135,39 @@ async def upload_document(
     except Exception as e:
         logger.error(f"Error uploading document: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+    @router.get("/task-status/{task_id}", response_model=TaskStatusResponse)
+async def get_task_status(task_id: str):
+    """Get the status of a queued task"""
+    task = task_queue.get_task_status(task_id)
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    response = {
+        "task_id": task.task_id,
+        "doc_id": task.doc_id,
+        "status": task.status.value,
+        "created_at": task.created_at.isoformat(),
+    }
+    
+    if task.status == TaskStatus.COMPLETED:
+        response["category_id"] = task.category_id
+        response["completed_at"] = task.completed_at.isoformat()
+        
+        # Fetch category name from database
+        try:
+            cluster_response = _rag_service.supabase.table('clusters')\
+                .select('label')\
+                .eq('id', task.category_id)\
+                .single()\
+                .execute()
+            if cluster_response.data:
+                response["category_name"] = cluster_response.data['label']
+        except Exception as e:
+            logger.error(f"Error fetching category: {e}")
+    
+    elif task.status == TaskStatus.FAILED:
+        response["error"] = task.error
+    
+    return TaskStatusResponse(**response)
