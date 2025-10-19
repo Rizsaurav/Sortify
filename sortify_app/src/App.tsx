@@ -6,8 +6,8 @@ import { supabase } from "../../supabase/client"
 import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import Dashboard from "./components/landing_page/Dashboard"
-import AccountDetails from "./components/AccountDetails"
-import { DashboardLayout } from "./components/dashboard_layout"
+import AccountDetails from "./components/userprofilepage/AccountDetails"
+import { DashboardLayout } from "./components/landing_page/dashboard_layout"
 
 
 function App() {
