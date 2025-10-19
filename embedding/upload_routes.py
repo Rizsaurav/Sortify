@@ -137,37 +137,84 @@ async def upload_document(
         raise HTTPException(status_code=500, detail=str(e))
     
     @router.get("/task-status/{task_id}", response_model=TaskStatusResponse)
-async def get_task_status(task_id: str):
-    """Get the status of a queued task"""
-    task = task_queue.get_task_status(task_id)
-    
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    response = {
-        "task_id": task.task_id,
-        "doc_id": task.doc_id,
-        "status": task.status.value,
-        "created_at": task.created_at.isoformat(),
-    }
-    
-    if task.status == TaskStatus.COMPLETED:
-        response["category_id"] = task.category_id
-        response["completed_at"] = task.completed_at.isoformat()
+    async def get_task_status(task_id: str):
+        """Get the status of a queued task"""
+        task = task_queue.get_task_status(task_id)
         
-        # Fetch category name from database
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        response = {
+            "task_id": task.task_id,
+            "doc_id": task.doc_id,
+            "status": task.status.value,
+            "created_at": task.created_at.isoformat(),
+        }
+        
+        if task.status == TaskStatus.COMPLETED:
+            response["category_id"] = task.category_id
+            response["completed_at"] = task.completed_at.isoformat()
+            
+            # Fetch category name from database
+            try:
+                cluster_response = _rag_service.supabase.table('clusters')\
+                    .select('label')\
+                    .eq('id', task.category_id)\
+                    .single()\
+                    .execute()
+                if cluster_response.data:
+                    response["category_name"] = cluster_response.data['label']
+            except Exception as e:
+                logger.error(f"Error fetching category: {e}")
+        
+        elif task.status == TaskStatus.FAILED:
+            response["error"] = task.error
+        
+        return TaskStatusResponse(**response)
+    
+    @router.get("/file-category/{doc_id}", response_model=FileCategoryResponse)
+    async def get_file_category(doc_id: str):
+        """Get the category of a document from vector database"""
         try:
-            cluster_response = _rag_service.supabase.table('clusters')\
-                .select('label')\
-                .eq('id', task.category_id)\
+            # Fetch document with cluster info
+            doc_response = _rag_service.supabase.table('documents')\
+                .select('cluster_id, metadata')\
+                .eq('id', doc_id)\
                 .single()\
                 .execute()
-            if cluster_response.data:
-                response["category_name"] = cluster_response.data['label']
+            
+            if not doc_response.data:
+                raise HTTPException(status_code=404, detail="Document not found")
+            
+            cluster_id = doc_response.data.get('cluster_id')
+            
+            if not cluster_id:
+                return FileCategoryResponse(
+                    doc_id=doc_id,
+                    category="Uncategorized",
+                    status="pending",
+                    filename=doc_response.data.get('metadata', {}).get('filename', 'Unknown')
+                )
+            
+            # Fetch category label
+            cluster_response = _rag_service.supabase.table('clusters')\
+                .select('label')\
+                .eq('id', cluster_id)\
+                .single()\
+                .execute()
+            
+            return FileCategoryResponse(
+                doc_id=doc_id,
+                category=cluster_response.data['label'] if cluster_response.data else "Unknown",
+                cluster_id=cluster_id,
+                filename=doc_response.data.get('metadata', {}).get('filename', 'Unknown'),
+                status="categorized"
+            )
+            
+        except HTTPException:
+            raise
         except Exception as e:
-            logger.error(f"Error fetching category: {e}")
-    
-    elif task.status == TaskStatus.FAILED:
-        response["error"] = task.error
-    
-    return TaskStatusResponse(**response)
+            logger.error(f"Error fetching file category: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
