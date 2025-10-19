@@ -61,3 +61,77 @@ def set_dependencies(rag_service, sorter):
     global _rag_service, _sorter
     _rag_service = rag_service
     _sorter = sorter
+
+@router.post("", response_model=DocumentUploadResponse)
+async def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    user_id: str = Form(...)
+):
+    """
+    Upload a document and queue it for categorization.
+    Returns immediately without waiting for ML processing.
+    """
+    try:
+        # Read content
+        content_bytes = await file.read()
+        
+        # Extract content based on type
+        if file.content_type and file.content_type.startswith('text/'):
+            content_str = content_bytes.decode("utf-8", errors="ignore")
+            
+        elif file.content_type == 'application/pdf':
+            try:
+                from pypdf import PdfReader
+                pdf_file = io.BytesIO(content_bytes)
+                reader = PdfReader(pdf_file)
+                text_pages = [page.extract_text() for page in reader.pages if page.extract_text()]
+                content_str = "\n\n".join(text_pages)
+                if not content_str.strip():
+                    content_str = f"PDF: {file.filename} (no extractable text)"
+            except Exception as e:
+                logger.error(f"PDF extraction failed: {e}")
+                content_str = f"PDF: {file.filename} (extraction failed: {str(e)})"
+                
+        elif file.content_type and file.content_type.startswith('image/'):
+            content_str = f"Image: {file.filename}\nType: {file.content_type}\nSize: {len(content_bytes)} bytes"
+            
+        else:
+            content_str = f"File: {file.filename}\nType: {file.content_type or 'unknown'}"
+        
+        # Insert to Supabase WITHOUT waiting for categorization
+        insert_response = _rag_service.supabase.table('documents').insert({
+            'content': content_str,
+            'metadata': {
+                'user_id': user_id,
+                'filename': file.filename,
+                'type': file.content_type,
+                'size': len(content_bytes)
+            },
+            'embedding': None,
+            'cluster_id': None  # Will be updated by background task
+        }).execute()
+        
+        doc_id = insert_response.data[0]['id']
+        
+        # Generate unique task ID
+        task_id = str(uuid.uuid4())
+        
+        # Add to queue
+        task_queue.add_task(task_id, doc_id, user_id, content_str)
+        
+        # Start queue processing in background
+        background_tasks.add_task(task_queue.process_queue, _sorter)
+        
+        return DocumentUploadResponse(
+            filename=file.filename,
+            status="queued",
+            message=f"Document uploaded with ID {doc_id}. Task {task_id} queued for processing.",
+            doc_id=doc_id,
+            task_id=task_id,
+            timestamp=datetime.now()
+        )
+        
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
