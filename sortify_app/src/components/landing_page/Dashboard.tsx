@@ -92,6 +92,8 @@ export default function Dashboard() {
   const [result, setResult] = useState<any>(null)
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any>(null);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [chatbotInitialMessage, setChatbotInitialMessage] = useState('');
 
   useEffect(() => {
     checkAuth();
@@ -621,50 +623,19 @@ export default function Dashboard() {
     setPreviewType('none');
   };
 
-  const handleRAGSearch = async () => {
-    if (!searchQuery.trim()) return;
-    
-    setIsSearching(true);
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setNotification('Please log in to search');
-        return;
-      }
-      
-      // Call your backend RAG search
-      const formData = new FormData();
-      formData.append('question', searchQuery);
-      formData.append('user_id', user.id);
-      formData.append('top_k', '5');
-      
-      const response = await fetch('http://localhost:8000/ask_supabase', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) throw new Error('Search failed');
-      
-      const result = await response.json();
-      setSearchResults(result);
-      
-      // Show results (you can create a modal or section to display them)
-      console.log('Answer:', result.answer);
-      console.log('Sources:', result.sources);
-      
-      setNotification(`Found ${result.sources.length} relevant documents!`);
-      setTimeout(() => setNotification(null), 3000);
-      
-    } catch (error: any) {
-      console.error('Search error:', error);
-      setNotification(`Search failed: ${error.message}`);
-      setTimeout(() => setNotification(null), 3000);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
+const handleRAGSearch = async () => {
+  if (!searchQuery.trim()) return;
+  
+  console.log('AI Search clicked!'); // Add this line
+  console.log('Search query:', searchQuery); // Add this line
+  console.log('Setting chatbot open...'); // Add this line
+  
+  // Open chatbot with search query
+  setChatbotInitialMessage(searchQuery);
+  setIsChatbotOpen(true);
+  
+  console.log('Chatbot should be open now'); // Add this line
+};
 // Check guest mode at render level
 const isGuest = localStorage.getItem('isGuest') === 'true';
 
@@ -1206,19 +1177,14 @@ if (!isAuthenticated && !isGuest) {
                   </div>
                 </div>
               </div>
-              return (
-              <div className={darkMode ? 'dark' : ''}>
-                <div className="min-h-screen bg-background">
-                  {/* ... all your existing code ... */}
-                  
-                  {/* Add this line before the closing divs */}
-                  <ChatbotPopup />
-                </div>
-              </div>
-            );
             </main>
           </div>
         </div>
+        <ChatbotPopup 
+          isOpen={isChatbotOpen}
+          onOpenChange={setIsChatbotOpen}
+          initialMessage={chatbotInitialMessage}
+        />
       </div>
     </div>
   );
