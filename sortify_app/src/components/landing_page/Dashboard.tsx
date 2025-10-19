@@ -878,19 +878,37 @@ if (!isAuthenticated && !isGuest) {
                   </label>
                 </div>
 
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input 
-                    placeholder="Search through your documents, assignments, and notes..." 
-                    className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-primary outline-none transition-all shadow-sm"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  <button className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium">
-                    <Sparkles className="h-4 w-4" />
-                    AI Search
-                  </button>
-                </div>
+                // ... inside <div className="lg:col-span-2">
+
+                {displayFiles.length === 0 ? (
+                  <div className="bg-card rounded-xl border border-border p-12 text-center">
+                    {searchQuery ? (
+                      <>
+                        <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-semibold text-foreground mb-2">No documents found</h3>
+                        <p className="text-sm text-muted-foreground">Try a different search term or check your filters.</p>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-semibold text-foreground mb-2">No files to display</h3>
+                        <p className="text-sm text-muted-foreground mb-6">Upload your first file to get started with Sortify</p>
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
+                        >
+                          Upload Files
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* ... file mapping logic remains here ... */}
+                  </div>
+                )}
+
+                // ...
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors">
