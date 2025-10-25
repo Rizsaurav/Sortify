@@ -161,15 +161,7 @@ class DatabaseService:
             return []
     
     def get_chunks_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all chunks for a user (via RLS).
         
-        Args:
-            user_id: User ID
-        
-        Returns:
-            List of chunks
-        """
         try:
             response = self.client.table('document_chunks').select(
                 'id, content, embedding, document_id, chunk_index'
@@ -189,17 +181,7 @@ class DatabaseService:
         centroid: np.ndarray,
         user_id: str
     ) -> int:
-        """
-        Insert a new category.
         
-        Args:
-            label: Category label
-            centroid: Category centroid vector
-            user_id: User ID
-        
-        Returns:
-            Category ID
-        """
         try:
             data = {
                 'label': label,
@@ -221,18 +203,8 @@ class DatabaseService:
         category_id: int,
         **updates
     ) -> bool:
-        """
-        Update category fields.
-        
-        Args:
-            category_id: Category ID
-            **updates: Fields to update
-        
-        Returns:
-            Success status
-        """
+       
         try:
-            # Convert numpy arrays
             for key, value in updates.items():
                 if isinstance(value, np.ndarray):
                     updates[key] = value.tolist()
@@ -246,15 +218,7 @@ class DatabaseService:
             return False
     
     def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all categories for a user.
         
-        Args:
-            user_id: User ID
-        
-        Returns:
-            List of categories
-        """
         try:
             response = self.client.table('clusters').select('*').eq(
                 'user_id', user_id
@@ -269,15 +233,7 @@ class DatabaseService:
     # ==================== Helper Methods ====================
     
     def parse_embedding(self, embedding_data: Any) -> Optional[np.ndarray]:
-        """
-        Parse embedding from database format to numpy array.
-        
-        Args:
-            embedding_data: Embedding data (string, list, or array)
-        
-        Returns:
-            Numpy array or None
-        """
+       
         try:
             if embedding_data is None:
                 return None
@@ -292,12 +248,9 @@ class DatabaseService:
             return None
 
 
-# Singleton instance
 _database_service: Optional[DatabaseService] = None
 
-
 def get_database_service() -> DatabaseService:
-    """Get or create database service singleton."""
     global _database_service
     if _database_service is None:
         _database_service = DatabaseService()

@@ -4,7 +4,7 @@ Handles all text chunking logic with sentence-aware splitting.
 """
 
 import re
-from typing import List, Tuple
+from typing import List
 from utils import get_logger, TextProcessor
 from config import get_settings
 
@@ -64,7 +64,6 @@ class ChunkingService:
             logger.warning("No chunks created from sentences")
             return []
         
-        # Filter out chunks that are too small (be more lenient)
         min_words = max(5, self.min_chunk_size // 3)  # Much more lenient
         filtered_chunks = [c for c in chunks if self._word_count(c) >= min_words]
         
@@ -79,16 +78,13 @@ class ChunkingService:
     
     def _split_sentences(self, text: str) -> List[str]:
         
-        # Use multiple patterns for sentence boundaries
         patterns = [
             r'(?<=[.!?])\s+(?=[A-Z])',  # Period/!/? followed by capital
             r'(?<=\n)\s*(?=\w)',         # Newline followed by word
         ]
         
-        # First try smart splitting
         sentences = re.split(patterns[0], text)
         
-        # Further split on newlines if sentences are too long
         final_sentences = []
         for sent in sentences:
             if self._word_count(sent) > self.chunk_size * 1.5:
@@ -109,12 +105,10 @@ class ChunkingService:
         for i, sentence in enumerate(sentences):
             sentence_words = self._word_count(sentence)
             
-            # If adding this sentence exceeds chunk size, finalize current chunk
             if current_word_count + sentence_words > self.chunk_size and current_chunk:
                 # Join current chunk
                 chunks.append(' '.join(current_chunk))
                 
-                # Start new chunk with overlap
                 overlap_sentences = self._get_overlap_sentences(
                     current_chunk,
                     self.chunk_overlap
@@ -122,11 +116,9 @@ class ChunkingService:
                 current_chunk = overlap_sentences
                 current_word_count = sum(self._word_count(s) for s in current_chunk)
             
-            # Add sentence to current chunk
             current_chunk.append(sentence)
             current_word_count += sentence_words
         
-        # Add final chunk
         if current_chunk:
             chunks.append(' '.join(current_chunk))
         
@@ -156,7 +148,6 @@ class ChunkingService:
         return overlap_sentences
     
     def _word_count(self, text: str) -> int:
-        """Count words in text."""
         return len(text.split())
     
     def get_chunk_metadata(self, chunk: str) -> dict:
@@ -172,17 +163,13 @@ class ChunkingService:
         if word_count == 0:
             return 0
         
-        # Rough estimation
         effective_chunk_size = self.chunk_size - self.chunk_overlap
         return max(1, (word_count + effective_chunk_size - 1) // effective_chunk_size)
 
-
-# Singleton instance
 _chunking_service = None
 
 
 def get_chunking_service() -> ChunkingService:
-    """Get or create chunking service singleton."""
     global _chunking_service
     if _chunking_service is None:
         _chunking_service = ChunkingService()
