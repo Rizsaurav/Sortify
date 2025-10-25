@@ -14,23 +14,12 @@ logger = get_logger(__name__)
 
 
 class EmbeddingService:
-    """
-    Handles embedding generation using SentenceTransformer models.
-    Single Responsibility: Convert text to vector embeddings.
-    """
     
     def __init__(
         self,
         model_name: Optional[str] = None,
         device: Optional[str] = None
     ):
-        """
-        Initialize the embedding service.
-        
-        Args:
-            model_name: Name of the model to use (default from config)
-            device: Device to run on ('cpu' or 'cuda', default auto-detect)
-        """
         config = get_model_config()
         
         self.model_name = model_name or config.embedding_model_name
@@ -55,20 +44,7 @@ class EmbeddingService:
         use_instruction: bool = False,
         instruction_prompt: str = "query"
     ) -> np.ndarray:
-        """
-        Generate embeddings for text(s).
         
-        Args:
-            texts: Single text or list of texts
-            batch_size: Batch size for processing
-            show_progress: Show progress bar
-            normalize: Normalize embeddings to unit length
-            use_instruction: Use instruction prompt for the model
-            instruction_prompt: Instruction key (e.g., 'query' or 'passage')
-        
-        Returns:
-            Numpy array of embeddings (1D for single text, 2D for list)
-        """
         try:
             # Handle single text
             is_single = isinstance(texts, str)
@@ -102,28 +78,9 @@ class EmbeddingService:
             raise
     
     def encode_query(self, query: str) -> np.ndarray:
-        """
-        Generate embedding for a search query.
-        Uses instruction prompt optimization if available.
-        
-        Args:
-            query: Query text
-        
-        Returns:
-            Query embedding vector
-        """
         return self.encode(query, use_instruction=True, instruction_prompt="query")
     
     def encode_document(self, document: str) -> np.ndarray:
-        """
-        Generate embedding for a document.
-        
-        Args:
-            document: Document text
-        
-        Returns:
-            Document embedding vector
-        """
         return self.encode(document, use_instruction=False)
     
     def encode_batch(
@@ -132,17 +89,6 @@ class EmbeddingService:
         batch_size: int = 32,
         show_progress: bool = False
     ) -> np.ndarray:
-        """
-        Generate embeddings for a batch of texts efficiently.
-        
-        Args:
-            texts: List of texts
-            batch_size: Batch size for processing
-            show_progress: Show progress bar
-        
-        Returns:
-            2D numpy array of embeddings
-        """
         return self.encode(
             texts,
             batch_size=batch_size,
@@ -150,11 +96,9 @@ class EmbeddingService:
         )
     
     def get_dimension(self) -> int:
-        """Get the embedding dimension."""
         return self.embedding_dim
     
     def get_model_info(self) -> dict:
-        """Get model information."""
         return {
             "model_name": self.model_name,
             "dimension": self.embedding_dim,
@@ -168,7 +112,6 @@ _embedding_service: Optional[EmbeddingService] = None
 
 
 def get_embedding_service() -> EmbeddingService:
-    """Get or create embedding service singleton."""
     global _embedding_service
     if _embedding_service is None:
         _embedding_service = EmbeddingService()
