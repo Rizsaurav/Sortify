@@ -45,3 +45,10 @@ class LoggerFactory:
             root_logger.addHandler(file_handler)
         
         cls._configured = True
+        
+    @classmethod
+    def get_logger(cls, name: str) -> logging.Logger:
+        """Get a logger instance with the given name."""
+        if not cls._configured:
+            cls.configure()
+        return logging.getLogger(name)
