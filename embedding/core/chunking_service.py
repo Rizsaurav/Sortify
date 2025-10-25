@@ -12,10 +12,6 @@ logger = get_logger(__name__)
 
 
 class ChunkingService:
-    """
-    Handles intelligent document chunking.
-    Single Responsibility: Split documents into optimal chunks for embedding.
-    """
     
     def __init__(
         self,
@@ -23,14 +19,7 @@ class ChunkingService:
         chunk_overlap: int = None,
         min_chunk_size: int = 50
     ):
-        """
-        Initialize the chunking service.
-        
-        Args:
-            chunk_size: Maximum words per chunk (default from config)
-            chunk_overlap: Number of overlapping words (default from config)
-            min_chunk_size: Minimum words per chunk
-        """
+       
         settings = get_settings()
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
@@ -42,16 +31,7 @@ class ChunkingService:
         )
     
     def chunk_text(self, text: str, preprocess: bool = True) -> List[str]:
-        """
-        Split text into chunks using sentence-aware algorithm.
         
-        Args:
-            text: Text to chunk
-            preprocess: Whether to preprocess/clean text first
-        
-        Returns:
-            List of text chunks
-        """
         if not text or not text.strip():
             logger.warning("Empty text provided for chunking")
             return []
@@ -98,15 +78,7 @@ class ChunkingService:
         return filtered_chunks
     
     def _split_sentences(self, text: str) -> List[str]:
-        """
-        Split text into sentences intelligently.
         
-        Args:
-            text: Text to split
-        
-        Returns:
-            List of sentences
-        """
         # Use multiple patterns for sentence boundaries
         patterns = [
             r'(?<=[.!?])\s+(?=[A-Z])',  # Period/!/? followed by capital
@@ -129,15 +101,7 @@ class ChunkingService:
         return [s for s in final_sentences if s]
     
     def _build_chunks_from_sentences(self, sentences: List[str]) -> List[str]:
-        """
-        Build chunks from sentences with overlap.
-        
-        Args:
-            sentences: List of sentences
-        
-        Returns:
-            List of chunks
-        """
+       
         chunks = []
         current_chunk = []
         current_word_count = 0
@@ -173,16 +137,7 @@ class ChunkingService:
         sentences: List[str],
         overlap_words: int
     ) -> List[str]:
-        """
-        Get sentences for overlap from end of previous chunk.
-        
-        Args:
-            sentences: Previous chunk sentences
-            overlap_words: Number of words to overlap
-        
-        Returns:
-            Sentences for overlap
-        """
+       
         if not sentences or overlap_words == 0:
             return []
         
@@ -205,30 +160,14 @@ class ChunkingService:
         return len(text.split())
     
     def get_chunk_metadata(self, chunk: str) -> dict:
-        """
-        Get metadata for a chunk.
         
-        Args:
-            chunk: Chunk text
-        
-        Returns:
-            Dictionary with word_count and char_count
-        """
         return {
             'word_count': self._word_count(chunk),
             'char_count': len(chunk)
         }
     
     def estimate_chunks(self, text: str) -> int:
-        """
-        Estimate number of chunks for a text.
         
-        Args:
-            text: Text to estimate
-        
-        Returns:
-            Estimated number of chunks
-        """
         word_count = self._word_count(text)
         if word_count == 0:
             return 0
