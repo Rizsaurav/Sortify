@@ -1,0 +1,29 @@
+Deep Learning Fundamentals
+
+Deep Learning is a specialized subset of machine learning that uses artificial neural networks with multiple layers (hence "deep") to model complex patterns in data.
+
+Neural Network Architecture:
+- Input Layer: Receives the raw data
+- Hidden Layers: Process information through multiple transformations
+- Output Layer: Produces the final prediction
+
+Key Components:
+1. Neurons: Basic computational units that apply activation functions
+2. Weights: Parameters that the network learns during training
+3. Biases: Additional parameters to improve model flexibility
+4. Activation Functions: Non-linear functions (ReLU, sigmoid, tanh)
+5. Backpropagation: Algorithm for updating weights based on errors
+
+Popular Architectures:
+- Convolutional Neural Networks (CNNs): Excellent for image processing
+- Recurrent Neural Networks (RNNs): Great for sequential data like text
+- Transformers: State-of-the-art for natural language processing
+- GANs: Generate new data similar to training data
+
+Training Process:
+1. Forward pass: Input data flows through the network
+2. Loss calculation: Measure error between prediction and actual
+3. Backward pass: Calculate gradients using backpropagation
+4. Weight update: Adjust parameters to minimize loss
+
+Applications: Computer vision, speech recognition, language translation, game playing, and generative AI.

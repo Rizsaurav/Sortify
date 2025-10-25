@@ -32,18 +32,96 @@ continuous chat. We have a team of 5: Saurav Rijal, Shivendra Bhagat, Aaditya Ba
 - Python
 - Flask or Express
 
-
 ## Features
+
+## Sprint 1
+
+Contributors
+
+  Abheek: "implemented document processing and semantic search capabilities for PDF files"
+
+* **Jira Task: Abheek - Implement document text extraction**
+   * KAN-49, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-49-mplement-document-text-extraction/)
+* **Jira Task: Abheek - Create PDF embedding model**
+   * KAN-91, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-91-create-pdf---embedding-model/)
+* **Jira Task: Abheek - Build semantic search functionality**
+   * KAN-51, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-51-build-semantic-search-functionali/)
+
+  **Aaditya**: "Setup backend with FastApi and build routes for login/register and dynamic page loading"
+
+* **Jira Task: Aaditya - FastAPI Backend Project Setup**
+   * KAN-24, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-24_flask_backend)
+* **Jira Task: Aaditya - HomePage, AboutPage**
+   * KAN-23, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-23-make-the-api-endpoints-for-restfu)
+* **Jira Task: Aaditya - Login and Register Link**
+   * KAN-51, [Bitbucket]()
+
+  Shivendra: "Design and develop the dashboard and ui components of the landing page"
+
+* **Jira Task: Shivendra - Create a react app and setup the codebase**
+   * KAN-74, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-74-create-signup-form)
+* **Jira Task: Shivendra - Start with the ui components for the landing page**
+   * KAN-83, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-83-start-with-the-ui-components-for-)
+* **Jira Task: Shivendra - Design and implement dashboard design**
+   * KAN-89, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-89-design-and-implement-dashboard)
+* **Jira Task: Shivendra - Add responsiveness and test layout on different screen sizes**
+   * KAN-88, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-88-test-layout-on-different-screens)
+
+   **Saurav**: "Setup Supabase database, Authentication pages and connected the database to the upload form"
+
+* **Jira Task: Saurav - Design and build user profiles table**
+   * KAN-20, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-20-1.-design-and-build-file-upload-u)
+* **Jira Task: Saurav - Setup supabase and connect with React App**
+   * KAN-25, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-25-setup-firebase)
+* **Jira Task: Saurav - Connect supabase storage to the upload form**
+   * KAN-26, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-26-3.-connect-supabase-storage-to-th)
+* **Jira Task: Saurav - Enable user authentication in Supabase**
+   * KAN-27, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-27-4-enable-user-authentication-in-supabase)
+* **Jira Task: Saurav - Enable user authentication in Supabase**
+   * KAN-34, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-34-test-authentication-in-the-vite-app)
+
+ **Abhishek Verma Allamneni**: "Created a page to access user profile settings and update them"
+
+**Jira Task: Saurav - Created a page to access user profile settings**
+   * KAN-94, [Bitbucket][(https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/](https://bitbucket.org/%7B48ce9ca7-bb35-4613-92ee-029f8d0e4a21%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/pull-requests/5)
+
+
+## Reports
+![alt text](./BurnupCharts/image.png)
+
+
+
+## Next Steps
+
+**Aaditya**: 
+
+* Storing documents into subfolders online
+* Automatically making new sections for different documents
+* Document sorting into different folders
+
+**Shivendra**:
+ * Update the ui according to the backend team's needs as they progress
+ * Add the chatbot ui
+ * Refactor the CSS for Dashboard
+ 
+**Saurav**:
+* Refining RAG for richer output
+* Connecting RAG to the frontend
+* Connecting the backend to the frontend
+
+**Abheek**:
+
+* Working on optimizing database queries
+* Optimizing the output of RAG model 
+* Effectively storing the embeddings 
+
+**Abhisek**
+
+
 List the ready features here:
 - Document organization system, Feature name: Document Organizer, used by student 
 - Automated summarizing of files, Feature name: Document Summarizer, used by student 
 - Efficient Retrieval of data, Feature name: Document Retriever, used by student
-
-
-## Screenshots
-
-![Alt text](https://drive.google.com/uc?export=view&id=1oPgaTd_XfypZ0y_VnCbko5Vk4aiuvXDA)
-
 
 
 ## Setup
@@ -83,7 +161,7 @@ Give credit here.
 
 
 ## Contact
-Created by [@flynerdpl](https://www.flynerd.pl/) - feel free to contact me!
+
 
 
 <!-- Optional -->

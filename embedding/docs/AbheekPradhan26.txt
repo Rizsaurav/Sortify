@@ -1,0 +1,54 @@
+Abheek Pradhan
+469-875-9205 | appradhann@gmail.com | linkedin.com/in/abheekpradhan | github.com/lolout1
+Education
+Texas State University San Marcos, TX
+Bachelor of Science in Computer Science and Engineering Expected May 2026
+• Activities and Societies: Vice President - .EXE , ACM
+Work Experience (Upcoming Publications: Multimodal Fall Detection on edge devices ETA: 03/2026(Link))
+Toshiba - Software Engineering Intern May 2025 - September 2025
+Toshiba International Corporation
+• Developed STM32 multi-core FreeRTOS ( real time operating system ) firmware and TouchGFX UI for medium voltage drives
+on ARM/x64 architectures; improved C backend performance by 25% through task priority optimization and stack size tuning
+using native FreeRTOS and CMSIS-RTOS2 APIs ( C , C++ ).
+• Built automated testing infrastructure using Python, Bash, and Rubyfor 10,000+ parameter validation on hardware and
+simulators; created GitLab CI/CD pipelines for all tests ( unit, integration, HIL ( Hardware in Loop).
+• Engineered RAG based AI agent for defect detection using Azure Copilot to parse CAD drawings from Oracle database,
+achieving 90% accuracy in identifying manufacturing defects
+Research Assistant(Texas State University) August 2024-PresentGithub
+• Collaborated with PhD students led by Dr. Anne Ngu to assist with training multi modal transformer models and overall
+knowledge distillation pipeline for fall detection on edge devices with cross modal learning funded by NSF.
+• Responsible for deploying Pytorch / Tensorflow Transformer models to edge (Android) via conversion to Tensorflow lite using
+pre and post training quantization , achieving <1% accuracy loss and 1.5x-2x battery improvement
+• Built multi-modal data pipeline with RESTful APIsand PostgreSQL database; implemented signal processing algorithms
+(Butterworth, Kalman filters , sensor fusion ) to clean data for knowledge distillation achieving 5% F1 score increase
+• Optimized inference on low-resource hardware (e.g. smartwatch and phone) via multi-threading, batch-processing, refactoring
+incompatible model operations, and hardware-acceleration (GPU, NPU) resulting in 3x speedup in Java , Kotlin android app.
+Machine Learning Engineer(Texas State University) December 2024-PresentTry NeuroNest!Github
+• Engineered ML backend / full-stack systems for Alzheimer’s research project. Deployed scalable ML backend using Hugging Face
+Spaces with Docker containerization and AWS services(S3, API Gateway, DynamoDB, CloudWatch).
+• Fine-tuned Vision Transformer and MASK R-CNN models for object detection / agentic pipeline; led comprehensive dataset
+creation with systematic annotation protocols, achieving 98% precisionthrough data balancing and augmentation
+• Optimized inference via multi-threading, RGB analysis, and parallel processing across Python, Java, and React Native platforms
+Projects
+FPGA-Optimized Facial Recognition (C, C++, Embedded Linux, Yocto, PyTorch) YouTube — Github
+• Developed facial recognition on Kria KV260 SoC achieving 99.47% accuracy with ensemble architecture for face detection,
+recognition, and landmark extraction using CUDA accelerated training and Vitis AI/Vivado toolchain optimization.
+• Engineered zero-copy DMA architecture with hardware-accelerated GStreamer and INT8 quantization (16x model size
+reduction, <0.5% accuracy loss), reducing memory bandwidth by 60% and achieving 2ms end-to-end latency.
+• Delivered 100x CPU speedup and 300-800% industry improvement through multi-threaded processing and parallel DPU
+inference with custom Vitis kernels, scaling from 0.5-5 FPS to 30-500+ FPS at 500 fps throughput.
+Autonomous Chess Bot for online chess games ( Spring Boot , Java , Javascript, HTML ) YouTube — Github
+• Created a chess desktop app integrated with Stockfish 16.1 API (3600 Elo) to play on Lichess.org autonomously. Utilized
+JSON-based messaging, asynchronous multi-threading, and database indexing/caching for consistent reliable performance.
+Pricing Vanilla European Bitcoin Options (C++, Python, Selenium)
+• Implemented Black-Scholes model in C++ using Finite Difference Method and Monte Carlo simulation, with web scraping
+pipeline via REST APIs to validate theoretical Bitcoin option prices against historical contract data.
+Real-Time Audio Transcriber ( Python, ReactJS, Next.js, CSS ) Bitbucket
+• Full Stack Architecture: Engineered a real-time audio transcription web application using Flask WebSocket backend with
+React.js/Next.js frontend, achieving <100ms latency using hardware-accelerated speech to text LLM ’whisper’.
+• Designed asynchronous audio processing pipeline with MongoDB for session persistence and transcript storage.
+Skills
+Full-Stack: ( AWS. Lambda , Unix , Fargate, JavaScript, TypeScript, UI/UX; NodeJS, Salesforce , SQL , C# , Rest API
+, Kubernetes , Angular,Git,Java, Docker, NoSQL , MySQL ,CI/CD , Selenium , Databricks, Qt , Jira, Agile, SCRUM
+AI/ML: (LLM, CNN, Computer Vision, Streamlit, MCP , MLOps , Spark , Transformers, Knowledge Distillation, .NET
+Embedded Systems :(Free RTOS , VHDL , DSP , JTAG , Linux, I2C SPI UART, Drivers, Interrupts, Networking
