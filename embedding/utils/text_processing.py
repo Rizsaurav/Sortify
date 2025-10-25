@@ -47,3 +47,31 @@ class TextProcessor:
         text = text.strip()
         
         return text
+    
+    @classmethod
+    def compute_hash(cls, text: str) -> str:
+        """
+        Compute SHA-256 hash of text.
+        
+        Args:
+            text: Text to hash
+        
+        Returns:
+            Hexadecimal hash string
+        """
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+    
+    @classmethod
+    def split_into_sentences(cls, text: str) -> List[str]:
+        """
+        Split text into sentences intelligently.
+        
+        Args:
+            text: Text to split
+        
+        Returns:
+            List of sentences
+        """
+        # Simple sentence splitting (can be improved with NLTK/spaCy if needed)
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        return [s.strip() for s in sentences if s.strip()]
