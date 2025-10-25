@@ -5,7 +5,7 @@ import { supabase } from "../../supabase/client"
 
 import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
-import Dashboard from "./components/landing_page/Dashboard"
+import Dashboard from "./components/Dashboard/Dashboard"
 import {ProfileProvider} from "./components/userProfiles/ProfileProviders"
 
 
