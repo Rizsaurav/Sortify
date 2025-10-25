@@ -75,3 +75,29 @@ class TextProcessor:
         # Simple sentence splitting (can be improved with NLTK/spaCy if needed)
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if s.strip()]
+    
+    @classmethod
+    def extract_keywords(cls, text: str, top_n: int = 5) -> List[str]:
+        # Remove common stop words (basic list)
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
+            'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those'
+        }
+        
+        # Extract words
+        words = re.findall(r'\b[a-z]{3,}\b', text.lower())
+        
+        # Filter stop words and count
+        from collections import Counter
+        word_counts = Counter(w for w in words if w not in stop_words)
+        
+        # Return top N
+        return [word for word, _ in word_counts.most_common(top_n)]
+    
+    @classmethod
+    def truncate(cls, text: str, max_length: int, suffix: str = "...") -> str:
+        if len(text) <= max_length:
+            return text
+        return text[:max_length - len(suffix)] + suffix
