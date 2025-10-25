@@ -15,19 +15,7 @@ logger = get_logger(__name__)
 
 
 class DatabaseService:
-    """
-    Handles all database operations with Supabase.
-    Single Responsibility: Database access layer.
-    """
-    
     def __init__(self, url: Optional[str] = None, key: Optional[str] = None):
-        """
-        Initialize database service.
-        
-        Args:
-            url: Supabase URL (default from config)
-            key: Supabase key (default from config)
-        """
         db_config = get_database_config()
         self.url = url or db_config.url
         self.key = key or db_config.key
@@ -48,18 +36,7 @@ class DatabaseService:
         embedding: Optional[np.ndarray] = None,
         cluster_id: Optional[int] = None
     ) -> str:
-        """
-        Insert a new document.
-        
-        Args:
-            content: Document content (or preview)
-            metadata: Document metadata
-            embedding: Document embedding
-            cluster_id: Category/cluster ID
-        
-        Returns:
-            Document ID
-        """
+
         try:
             data = {
                 'content': content,
@@ -82,16 +59,6 @@ class DatabaseService:
         doc_id: str,
         **updates
     ) -> bool:
-        """
-        Update document fields.
-        
-        Args:
-            doc_id: Document ID
-            **updates: Fields to update
-        
-        Returns:
-            Success status
-        """
         try:
             # Convert numpy arrays to lists
             for key, value in updates.items():
@@ -107,15 +74,6 @@ class DatabaseService:
             return False
     
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get document by ID.
-        
-        Args:
-            doc_id: Document ID
-        
-        Returns:
-            Document data or None
-        """
         try:
             response = self.client.table('documents').select('*').eq('id', doc_id).execute()
             return response.data[0] if response.data else None
@@ -125,15 +83,6 @@ class DatabaseService:
             return None
     
     def get_documents_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all documents for a user.
-        
-        Args:
-            user_id: User ID
-        
-        Returns:
-            List of documents
-        """
         try:
             response = self.client.table('documents').select('*').execute()
             
@@ -149,16 +98,6 @@ class DatabaseService:
             return []
     
     def check_duplicate_by_hash(self, content_hash: str, user_id: str) -> Optional[str]:
-        """
-        Check if document with hash exists for user.
-        
-        Args:
-            content_hash: Content hash
-            user_id: User ID
-        
-        Returns:
-            Document ID if duplicate found, None otherwise
-        """
         try:
             response = self.client.table('documents').select('id').eq(
                 'content_hash', content_hash
@@ -188,21 +127,7 @@ class DatabaseService:
         word_count: int,
         char_count: int
     ) -> bool:
-        """
-        Insert a document chunk.
-        
-        Args:
-            chunk_id: Chunk ID
-            document_id: Parent document ID
-            chunk_index: Chunk index
-            content: Chunk content
-            embedding: Chunk embedding
-            word_count: Word count
-            char_count: Character count
-        
-        Returns:
-            Success status
-        """
+
         try:
             data = {
                 'id': chunk_id,
@@ -223,15 +148,7 @@ class DatabaseService:
             return False
     
     def get_chunks_by_document(self, document_id: str) -> List[Dict[str, Any]]:
-        """
-        Get all chunks for a document.
         
-        Args:
-            document_id: Document ID
-        
-        Returns:
-            List of chunks
-        """
         try:
             response = self.client.table('document_chunks').select('*').eq(
                 'document_id', document_id
