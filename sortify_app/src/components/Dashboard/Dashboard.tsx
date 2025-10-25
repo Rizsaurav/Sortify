@@ -16,6 +16,7 @@ import { FilePreviewModal } from './components/FilePreviewModal';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { FileGrid } from './components/FileGrid';
+import { NotificationContainer } from './components/NotificationToast';
 
 // Types
 import type { ViewMode } from './types';
@@ -45,6 +46,8 @@ export default function Dashboard() {
     storageUsed,
     categoryCount,
     frequentFolders,
+    notifications,
+    removeNotification,
     handleFileUpload,
     deleteFile,
     renameFile
@@ -137,17 +140,11 @@ export default function Dashboard() {
   return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-background">
-        {/* Notification */}
-        {notification && (
-          <div className="fixed top-4 right-4 z-50 bg-card border border-border rounded-lg p-4 shadow-lg">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{notification}</span>
-              <button onClick={() => setNotification(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Notifications */}
+        <NotificationContainer 
+          notifications={notifications}
+          onRemove={removeNotification}
+        />
 
         {/* File Preview Modal */}
         <FilePreviewModal

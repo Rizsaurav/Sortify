@@ -57,7 +57,7 @@ class Settings:
         
         # API Configuration
         self.api_version = os.getenv('API_VERSION', '1.0.0')
-        cors_origins_str = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000')
+        cors_origins_str = os.getenv('CORS_ORIGINS', 'http://localhost:5173,http://localhost:3000,http://localhost:3001')
         self.cors_origins = [origin.strip() for origin in cors_origins_str.split(',')]
         
         # Processing Configuration

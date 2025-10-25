@@ -11,7 +11,23 @@ export const useFileManagement = () => {
   const [storageUsed, setStorageUsed] = useState(0);
   const [categoryCount, setCategoryCount] = useState<CategoryCount[]>([]);
   const [frequentFolders, setFrequentFolders] = useState<FrequentFolder[]>([]);
+  const [notifications, setNotifications] = useState<Array<{id: string, message: string, type: 'success' | 'error' | 'info'}>>([]);
   const [folderCounts] = useState<{[key: string]: number}>({});
+
+  // Notification functions
+  const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   const fetchFiles = async () => {
     try {
@@ -101,15 +117,23 @@ export const useFileManagement = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    addNotification(`Uploading ${files.length} file(s)...`, 'info');
+
     for (const file of Array.from(files)) {
       try {
         const result = await uploadDocument(file, user.id);
-        if (result.status === 'success') {
+        if (result.status === 'queued' || result.status === 'success') {
+          addNotification(`✅ ${file.name} uploaded successfully!`, 'success');
           // Refresh files after upload
           await fetchFiles();
+        } else if (result.status === 'duplicate') {
+          addNotification(`⚠️ ${file.name} already exists`, 'info');
+        } else {
+          addNotification(`❌ Failed to upload ${file.name}`, 'error');
         }
       } catch (error) {
         console.error('Upload failed:', error);
+        addNotification(`❌ Failed to upload ${file.name}: ${error}`, 'error');
       }
     }
   };
@@ -171,6 +195,9 @@ export const useFileManagement = () => {
     categoryCount,
     frequentFolders,
     folderCounts,
+    notifications,
+    addNotification,
+    removeNotification,
     fetchFiles,
     handleFileUpload,
     deleteFile,
@@ -191,12 +218,17 @@ const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
   const now = new Date();
   const diffTime = Math.abs(now.getTime() - date.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const diffMinutes = Math.floor(diffTime / (1000 * 60));
+  const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   
-  if (diffDays === 1) return '1 day ago';
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.ceil(diffDays / 7)} weeks ago`;
-  return `${Math.ceil(diffDays / 30)} months ago`;
+  if (diffDays < 30) return `${Math.ceil(diffDays / 7)} week${Math.ceil(diffDays / 7) > 1 ? 's' : ''} ago`;
+  return `${Math.ceil(diffDays / 30)} month${Math.ceil(diffDays / 30) > 1 ? 's' : ''} ago`;
 };
 
 const getCategoryColor = (category: string): string => {
