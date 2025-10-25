@@ -52,3 +52,8 @@ class LoggerFactory:
         if not cls._configured:
             cls.configure()
         return logging.getLogger(name)
+    
+    
+def get_logger(name: str) -> logging.Logger:
+    """Convenience function to get a logger."""
+    return LoggerFactory.get_logger(name)
