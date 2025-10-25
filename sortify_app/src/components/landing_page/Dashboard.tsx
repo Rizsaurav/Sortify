@@ -94,6 +94,9 @@ export default function Dashboard() {
   const [searchResults, setSearchResults] = useState<any>(null);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [chatbotInitialMessage, setChatbotInitialMessage] = useState('');
+  const [displayLimit, setDisplayLimit] = useState(6);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [performanceMetrics, setPerformanceMetrics] = useState<{[key: string]: number}>({});
 
   useEffect(() => {
     checkAuth();
@@ -227,6 +230,7 @@ export default function Dashboard() {
   };
 
   const loadAllUserDocuments = async () => {
+    const startTime = performance.now();
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -284,6 +288,9 @@ export default function Dashboard() {
           "Lab Reports": categoryCounts['Science'] || 0
         });
       }
+
+      const endTime = performance.now();
+      setPerformanceMetrics(prev => ({...prev, documentLoad: endTime - startTime}));
     } catch (error) {
       console.error('Error loading documents:', error);
     }
@@ -480,16 +487,19 @@ export default function Dashboard() {
   };
 
   const handlePreviewFile = async (file: UploadedFile) => {
+    const startTime = performance.now();
     setPreviewFile(file);
     setPreviewUrl(null);
     setPreviewContent(null);
     setPreviewType('none');
-    
+
     await incrementViewCount(file);
 
     if (!file.storage_path) {
       setPreviewContent(file.content || 'No content available');
       setPreviewType('text');
+      const endTime = performance.now();
+      setPerformanceMetrics(prev => ({...prev, previewLoad: endTime - startTime}));
       return;
     }
 
@@ -517,6 +527,9 @@ export default function Dashboard() {
         const text = await fileData.text();
         setPreviewContent(text || file.content || 'No content available');
       }
+
+      const endTime = performance.now();
+      setPerformanceMetrics(prev => ({...prev, previewLoad: endTime - startTime}));
     } catch (error) {
       console.error('Error loading preview:', error);
       setPreviewContent(file.content || 'Error loading file preview. Please try downloading the file.');
@@ -623,6 +636,17 @@ export default function Dashboard() {
     setPreviewType('none');
   };
 
+  const loadMoreDocuments = () => {
+    const startTime = performance.now();
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setDisplayLimit(prev => prev + 6);
+      setIsLoadingMore(false);
+      const endTime = performance.now();
+      setPerformanceMetrics(prev => ({...prev, loadMore: endTime - startTime}));
+    }, 300);
+  };
+
 const handleRAGSearch = async () => {
   if (!searchQuery.trim()) return;
   
@@ -655,6 +679,7 @@ if (!isAuthenticated && !isGuest) {
   const storageLimit = 15 * 1024 * 1024 * 1024;
   const storagePercentage = Math.min((storageUsed / storageLimit) * 100, 100);
   const displayFiles = searchQuery || selectedCategory || activeFilter ? filteredFiles : allFiles;
+  const paginatedFiles = displayFiles.slice(0, displayLimit);
 
   return (
     <div className={darkMode ? 'dark' : ''}>
@@ -1008,8 +1033,9 @@ if (!isAuthenticated && !isGuest) {
                       </button>
                     </div>
                   ) : (
+                    <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {displayFiles.slice(0, 6).map((file) => (
+                      {paginatedFiles.map((file) => (
                         <div key={file.id} className="group bg-card rounded-xl border border-border hover:shadow-xl transition-all cursor-pointer overflow-hidden">
                           <div className="p-4">
                             <div className="flex items-start justify-between mb-3">
@@ -1082,6 +1108,33 @@ if (!isAuthenticated && !isGuest) {
                         </div>
                       ))}
                     </div>
+                    {displayLimit < displayFiles.length && (
+                      <div className="mt-6 text-center">
+                        <button
+                          onClick={loadMoreDocuments}
+                          disabled={isLoadingMore}
+                          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:shadow-lg transition-all disabled:opacity-50"
+                        >
+                          {isLoadingMore ? (
+                            <>
+                              <div className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2" />
+                              Loading...
+                            </>
+                          ) : (
+                            `Load More (${displayFiles.length - displayLimit} remaining)`
+                          )}
+                        </button>
+                      </div>
+                    )}
+                    {Object.keys(performanceMetrics).length > 0 && (
+                      <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border text-xs">
+                        <div className="font-semibold mb-1">Performance Metrics:</div>
+                        {performanceMetrics.documentLoad && <div>Document Load: {performanceMetrics.documentLoad.toFixed(2)}ms</div>}
+                        {performanceMetrics.previewLoad && <div>Preview Load: {performanceMetrics.previewLoad.toFixed(2)}ms</div>}
+                        {performanceMetrics.loadMore && <div>Load More: {performanceMetrics.loadMore.toFixed(2)}ms</div>}
+                      </div>
+                    )}
+                    </>
                   )}
                 </div>
 
