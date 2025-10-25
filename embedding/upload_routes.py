@@ -13,7 +13,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel
 
-from task_queue import task_queue, TaskStatus
+from task_queue import task_queue, TaskStatus, TaskPriority
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +117,14 @@ async def upload_document(
         # Generate unique task ID
         task_id = str(uuid.uuid4())
         
-        # Add to queue
-        task_queue.add_task(task_id, doc_id, user_id, content_str)
+        # Add to queue with priority
+        task_queue.add_task(
+            task_id,
+            doc_id,
+            user_id,
+            content_str,
+            priority=TaskPriority.NORMAL
+        )
         
         # Start queue processing in background
         background_tasks.add_task(task_queue.process_queue, _sorter)
@@ -217,4 +223,21 @@ async def upload_document(
             logger.error(f"Error fetching file category: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/queue/stats")
+async def get_queue_stats():
+    """Get job queue statistics and memory pool info"""
+    queue_stats = task_queue.get_queue_stats()
+
+    # Get memory pool stats if available
+    try:
+        from core.embedding_service import get_embedding_service
+        embedding_service = get_embedding_service()
+        model_info = embedding_service.get_model_info()
+        return {
+            "queue": queue_stats,
+            "memory_pool": model_info.get("memory_pool", {})
+        }
+    except Exception as e:
+        logger.warning(f"Could not fetch memory pool stats: {e}")
+        return {"queue": queue_stats}
 
