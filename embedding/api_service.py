@@ -94,6 +94,37 @@ class HealthResponse(BaseModel):
     chunks_available: int
     timestamp: datetime
 
+class MemoryPoolStats(BaseModel):
+    total_resources: int
+    in_use: int
+    available: int
+    current_size_mb: float
+    max_size_mb: float
+    utilization: float
+
+class WorkerPoolStats(BaseModel):
+    max_workers: int
+    active_workers: int
+    available_workers: int
+    total_memory_mb: float
+
+class ResourceStatsResponse(BaseModel):
+    memory_pool: MemoryPoolStats
+    worker_pool: WorkerPoolStats
+    system_memory: Dict[str, Any]
+    timestamp: datetime
+
+class TaskQueueStats(BaseModel):
+    total_tasks: int
+    pending: int
+    processing: int
+    completed: int
+    failed: int
+    queue_size: int
+    active_workers: int
+    max_workers: int
+    timestamp: datetime
+
 class RAGService:
     """RAG service wrapper for API integration."""
     
@@ -296,6 +327,40 @@ async def ask_question(request: QuestionRequest):
 async def search_documents(request: SearchRequest):
     """Search for similar document chunks."""
     return await rag_service.search_documents(request)
+
+@app.get("/resources", response_model=ResourceStatsResponse)
+async def get_resource_stats():
+    """Get memory and worker pool statistics."""
+    if not rag_service.is_ready:
+        raise HTTPException(
+            status_code=503,
+            detail="RAG system not ready"
+        )
+    try:
+        stats = rag_service.rag.get_resource_stats()
+        return ResourceStatsResponse(
+            memory_pool=MemoryPoolStats(**stats['memory_pool']),
+            worker_pool=WorkerPoolStats(**stats['worker_pool']),
+            system_memory=stats['system_memory'],
+            timestamp=datetime.now()
+        )
+    except Exception as e:
+        logger.error(f"Error getting resource stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/queue/stats", response_model=TaskQueueStats)
+async def get_queue_stats():
+    """Get task queue statistics."""
+    from task_queue import task_queue
+    try:
+        stats = task_queue.get_queue_stats()
+        return TaskQueueStats(
+            **stats,
+            timestamp=datetime.now()
+        )
+    except Exception as e:
+        logger.error(f"Error getting queue stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def sort_document_background(doc_id: str, content: str, user_id: str):
     sorter.sort_document(doc_id, content, user_id)
