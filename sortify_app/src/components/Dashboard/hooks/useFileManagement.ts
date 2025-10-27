@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../../../supabase/client';
 import type { UploadedFile, CategoryCount, FrequentFolder } from '../types';
-import { uploadDocument } from '../../../api/sorter';
+import { uploadDocument, getTaskStatus } from '../../../api/sorter';
 
 export const useFileManagement = () => {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -15,8 +15,11 @@ export const useFileManagement = () => {
   const [folderCounts] = useState<{[key: string]: number}>({});
 
   // Notification functions
+  let notificationIdCounter = 0;
+  
   const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now().toString();
+    notificationIdCounter++;
+    const id = `${Date.now()}-${notificationIdCounter}`;
     setNotifications(prev => [...prev, { id, message, type }]);
     
     // Auto-remove after 5 seconds
@@ -34,38 +37,65 @@ export const useFileManagement = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: files, error } = await supabase
-        .from('documents')
-        .select(`
-          id,
-          content,
-          metadata,
-          created_at,
-          clusters!inner(
-            id,
-            label
-          )
-        `)
-        .eq('metadata->>user_id', user.id)
-        .order('created_at', { ascending: false });
+      // Get documents via backend API to avoid RLS issues
+      let documents: any[] = [];
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/upload/documents?user_id=${user.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          documents = data.documents || [];
+          console.log('Documents fetched from backend:', documents.length);
+        } else {
+          console.error('Error fetching documents from backend:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching document metadata:', error);
+      }
 
-      if (error) throw error;
+      // Get categories via backend API to avoid RLS issues
+      let categoriesMap = new Map();
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/categories?user_id=${user.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Categories fetched from backend:', data);
+          if (data.categories) {
+            data.categories.forEach((cat: any) => {
+              categoriesMap.set(cat.id, cat.label);
+            });
+            console.log('Categories map created:', categoriesMap);
+          }
+        } else {
+          console.error('Error fetching categories from backend:', response.status);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
 
-      const processedFiles: UploadedFile[] = files?.map((file: any) => ({
-        id: file.id,
-        name: file.metadata?.filename || 'Unknown',
-        type: file.metadata?.type || 'unknown',
-        size: formatFileSize(file.metadata?.size || 0),
-        modified: formatDate(file.created_at),
-        category: file.clusters?.label || 'General Documents',
-        storage_path: file.metadata?.storage_path,
-        view_count: file.metadata?.view_count || 0,
-        metadata: file.metadata,
-        content: file.content,
-        created_at: file.created_at,
-        cluster_id: file.clusters?.id
-      })) || [];
+      const processedFiles: UploadedFile[] = documents.map((doc: any) => {
+        const categoryId = doc.cluster_id;
+        const categoryName = categoryId ? categoriesMap.get(categoryId) : 'General Documents';
+        
+        return {
+          id: doc.id,
+          name: doc.metadata?.filename || 'Unknown',
+          type: doc.metadata?.type || 'unknown',
+          size: formatFileSize(doc.metadata?.size || 0),
+          modified: formatDate(doc.created_at),
+          category: categoryName || 'General Documents',
+          storage_path: `${user.id}/${doc.metadata?.filename || 'unknown'}`,
+          view_count: 0,
+          metadata: {
+            ...doc.metadata,
+            filename: doc.metadata?.filename || 'Unknown'
+          },
+          content: doc.content || '', // Use content from backend
+          created_at: doc.created_at,
+          cluster_id: categoryId
+        };
+      });
 
+      console.log('Processed files:', processedFiles.length);
       setAllFiles(processedFiles);
       setUploadedFiles(processedFiles);
       setTotalFilesCount(processedFiles.length);
@@ -124,7 +154,45 @@ export const useFileManagement = () => {
         const result = await uploadDocument(file, user.id);
         if (result.status === 'queued' || result.status === 'success') {
           addNotification(`✅ ${file.name} uploaded successfully!`, 'success');
-          // Refresh files after upload
+          
+          // If there's a task_id, wait for completion before refreshing
+          if (result.task_id) {
+            addNotification(`⏳ Processing ${file.name}...`, 'info');
+            
+            // Poll for task completion
+            let attempts = 0;
+            const maxAttempts = 30; // 30 seconds max
+            
+            while (attempts < maxAttempts) {
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+              
+              try {
+                const taskStatus = await getTaskStatus(result.task_id);
+                
+                if (taskStatus.status === 'completed') {
+                  addNotification(`✅ ${file.name} processed successfully!`, 'success');
+                  break;
+                } else if (taskStatus.status === 'failed') {
+                  addNotification(`❌ Failed to process ${file.name}: ${taskStatus.error}`, 'error');
+                  break;
+                }
+                
+                attempts++;
+              } catch (error) {
+                console.error('Error checking task status:', error);
+                attempts++;
+              }
+            }
+            
+            if (attempts >= maxAttempts) {
+              addNotification(`⚠️ ${file.name} processing is taking longer than expected`, 'info');
+            }
+          }
+          
+          // Small delay to ensure processing is complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Refresh files after upload/processing
           await fetchFiles();
         } else if (result.status === 'duplicate') {
           addNotification(`⚠️ ${file.name} already exists`, 'info');

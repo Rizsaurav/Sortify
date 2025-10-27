@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import get_settings
-from api import upload_router, rag_router
+from api import upload_router, rag_router, category_router
 from utils import get_logger, LoggerFactory
 
 # Configure logging
@@ -41,6 +41,7 @@ app.add_middleware(
 # Include routers
 app.include_router(upload_router)
 app.include_router(rag_router)
+app.include_router(category_router)
 
 logger.info("=" * 60)
 logger.info("Sortify API Application Starting")

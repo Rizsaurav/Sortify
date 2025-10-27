@@ -220,22 +220,13 @@ class CategorizationService:
             logger.info(f"Hybrid categorizing document {document_id}")
             
             # Get existing categories
-            existing_categories = self._load_categories(user_id)
+            existing_categories = self.db_service.get_categories_by_user(user_id)
             
             if not existing_categories:
-                # Initialize standard categories for new user
-                logger.info(f"No categories found for user {user_id}, initializing standard categories")
-                self.initialize_standard_categories(user_id)
-                existing_categories = self._load_categories(user_id)
-                
-                # If still no categories, create a General Documents category
-                if not existing_categories:
-                    logger.warning("Standard category initialization failed, creating General Documents category")
-                    general_cat_id = self.db_service.insert_category(
-                        label='General Documents',
-                        centroid=aggregated_embedding,
-                        user_id=user_id
-                    )
+                # Create a general category if none exist
+                general_cat_id = self.db_service.get_or_create_general_category(user_id)
+                if general_cat_id:
+                    # Update document
                     self.db_service.update_document(document_id, cluster_id=general_cat_id)
                     
                     return {
@@ -248,67 +239,61 @@ class CategorizationService:
                         'default': True
                     }
             
-            # ENHANCED STEP 1: Multi-pass keyword analysis with weights
-            keyword_results = self._enhanced_keyword_analysis(content, filename)
-            suggested_categories = keyword_results['suggestions']
-            keyword_confidence = keyword_results['confidence']
-            logger.info(f"Enhanced keyword suggestions: {suggested_categories} (confidence: {keyword_confidence:.3f})")
+            # Simple keyword analysis
+            suggested_categories = self._analyze_keywords(content, filename)
+            logger.info(f"Keyword suggestions: {suggested_categories}")
             
-            # ENHANCED STEP 2: Dynamic candidate filtering with confidence
-            candidates = self._get_enhanced_candidates(suggested_categories, existing_categories, user_id)
+            # Find best semantic match
+            best_match = None
+            best_similarity = 0.0
             
-            # ENHANCED STEP 3: Multi-pass semantic matching with confidence scoring
-            semantic_results = self._enhanced_semantic_matching(aggregated_embedding, candidates, content, filename)
-            best_match = semantic_results['best_match']
-            semantic_confidence = semantic_results['confidence']
+            for category in existing_categories:
+                if category.get('centroid'):
+                    try:
+                        # Convert centroid to numpy array
+                        centroid_array = np.array(category['centroid'], dtype=np.float32)
+                        
+                        # Calculate cosine similarity
+                        similarity = self._calculate_cosine_similarity(aggregated_embedding, centroid_array)
+                        
+                        if similarity > best_similarity:
+                            best_similarity = similarity
+                            best_match = {
+                                'category_id': category['id'],
+                                'category': category,
+                                'similarity': similarity
+                            }
+                    except Exception as e:
+                        logger.warning(f"Error calculating similarity for category {category['id']}: {e}")
+                        continue
             
-            # ENHANCED STEP 4: Dynamic threshold with confidence validation
-            dynamic_threshold = self._calculate_dynamic_threshold(
-                best_match['similarity'] if best_match else 0,
-                keyword_confidence,
-                semantic_confidence,
-                len(existing_categories)
-            )
+            # Use simple threshold
+            dynamic_threshold = self.similarity_threshold
             
             if best_match and best_match['similarity'] >= dynamic_threshold:
                 category_id = best_match['category_id']
                 category = best_match['category']
                 
-                # Calculate overall confidence
-                overall_confidence = self._calculate_overall_confidence(
-                    best_match['similarity'],
-                    keyword_confidence,
-                    semantic_confidence,
-                    category.label in suggested_categories
-                )
-                
                 # Update document
                 self.db_service.update_document(document_id, cluster_id=category_id)
                 
-                # Enhanced centroid update with learning rate
-                self._update_category_centroid_with_learning(
-                    category_id,
-                    category,
-                    aggregated_embedding,
-                    overall_confidence
-                )
+                # Update centroid
+                self.db_service.update_category_centroid(category_id, aggregated_embedding.tolist())
                 
                 logger.info(
-                    f"✓ Assigned to '{category.label}' "
+                    f"✓ Assigned to '{category['label']}' "
                     f"(similarity: {best_match['similarity']:.3f}, "
-                    f"confidence: {overall_confidence:.3f}, "
                     f"threshold: {dynamic_threshold:.3f})"
                 )
                 
                 return {
                     'success': True,
                     'category_id': category_id,
-                    'category_name': category.label,
+                    'category_name': category['label'],
                     'is_new': False,
                     'similarity': best_match['similarity'],
-                    'confidence': overall_confidence,
-                    'keyword_match': category.label in suggested_categories,
-                    'dynamic_threshold': dynamic_threshold
+                    'keyword_match': category['label'] in suggested_categories,
+                    'method': 'semantic'
                 }
             
             # Step 5: Use best semantic match even if below threshold (no keyword fallback)
@@ -317,21 +302,17 @@ class CategorizationService:
                 category = best_match['category']
                 
                 self.db_service.update_document(document_id, cluster_id=category_id)
-                self._update_category_centroid(
-                    category_id,
-                    category,
-                    aggregated_embedding
-                )
+                self.db_service.update_category_centroid(category_id, aggregated_embedding.tolist())
                 
                 logger.info(
-                    f"✓ Assigned to '{category.label}' via semantic match "
+                    f"✓ Assigned to '{category['label']}' via semantic match "
                     f"(similarity: {best_match['similarity']:.3f}, below threshold)"
                 )
                 
                 return {
                     'success': True,
                     'category_id': category_id,
-                    'category_name': category.label,
+                    'category_name': category['label'],
                     'is_new': False,
                     'similarity': best_match['similarity'],
                     'keyword_match': False,
@@ -340,18 +321,18 @@ class CategorizationService:
             
             # Step 6: Assign to General Documents as last resort
             general_cat = next(
-                (cat for cat in existing_categories if cat.label == 'General Documents'),
+                (cat for cat in existing_categories if cat['label'] == 'General Documents'),
                 None
             )
             
             if general_cat:
-                self.db_service.update_document(document_id, cluster_id=general_cat.id)
+                self.db_service.update_document(document_id, cluster_id=general_cat['id'])
                 
                 logger.info(f"✓ Assigned to 'General Documents' (no clear match)")
                 
                 return {
                     'success': True,
-                    'category_id': general_cat.id,
+                    'category_id': general_cat['id'],
                     'category_name': 'General Documents',
                     'is_new': False,
                     'similarity': 0.0,
@@ -361,9 +342,8 @@ class CategorizationService:
             
             # Step 7: If no General Documents category exists, create it
             logger.warning("No 'General Documents' category found, creating one")
-            general_cat_id = self.db_service.insert_category(
+            general_cat_id = self.db_service.create_category(
                 label='General Documents',
-                centroid=aggregated_embedding,
                 user_id=user_id
             )
             
@@ -495,13 +475,13 @@ class CategorizationService:
         
         for category in categories:
             # Skip zero centroids (uninitialized categories)
-            if np.allclose(category.centroid, 0):
+            if np.allclose(category['centroid'], 0):
                 continue
             
             # Compute cosine similarity
             sim = float(cosine_similarity(
                 embedding.reshape(1, -1),
-                category.centroid.reshape(1, -1)
+                np.array(category['centroid']).reshape(1, -1)
             )[0, 0])
             
             if sim > best_similarity:
@@ -529,12 +509,12 @@ class CategorizationService:
         Uses exponential moving average for stability.
         """
         # If centroid is zero (uninitialized), just use new embedding
-        if np.allclose(category.centroid, 0):
+        if np.allclose(category['centroid'], 0):
             updated_centroid = new_embedding
         else:
             # Exponential moving average
             updated_centroid = (
-                (1 - update_weight) * category.centroid +
+                (1 - update_weight) * np.array(category['centroid']) +
                 update_weight * new_embedding
             )
         
@@ -548,6 +528,45 @@ class CategorizationService:
         )
         
         logger.debug(f"Updated centroid for category {category_id}")
+
+    def _analyze_keywords(self, content: str, filename: str) -> List[str]:
+        """
+        Simple keyword analysis to suggest categories based on content and filename.
+        """
+        try:
+            content_lower = content.lower()
+            filename_lower = filename.lower()
+            
+            # Define keyword mappings
+            keyword_mappings = {
+                'Academic Work': ['research', 'thesis', 'dissertation', 'academic', 'scholar', 'university', 'college'],
+                'Course Materials': ['course', 'lecture', 'assignment', 'homework', 'syllabus', 'curriculum'],
+                'Research & Papers': ['research', 'paper', 'study', 'analysis', 'findings', 'methodology'],
+                'Science & Tech': ['science', 'technology', 'tech', 'engineering', 'programming', 'code', 'software'],
+                'Language & Arts': ['language', 'literature', 'art', 'creative', 'writing', 'poetry', 'novel'],
+                'Health & Medicine': ['health', 'medical', 'medicine', 'doctor', 'patient', 'treatment', 'therapy'],
+                'Business & Finance': ['business', 'finance', 'money', 'investment', 'market', 'economy', 'corporate'],
+                'General Documents': ['document', 'file', 'text', 'general']
+            }
+            
+            suggested_categories = []
+            
+            # Check content keywords
+            for category, keywords in keyword_mappings.items():
+                for keyword in keywords:
+                    if keyword in content_lower or keyword in filename_lower:
+                        suggested_categories.append(category)
+                        break
+            
+            # If no keywords found, suggest General Documents
+            if not suggested_categories:
+                suggested_categories.append('General Documents')
+            
+            return suggested_categories
+            
+        except Exception as e:
+            logger.error(f"Keyword analysis failed: {e}")
+            return ['General Documents']
 
 
 # Singleton instance
@@ -633,7 +652,7 @@ def get_categorization_service() -> CategorizationService:
         """
         candidates = [
             cat for cat in existing_categories
-            if cat.label in suggested_categories
+            if cat['label'] in suggested_categories
         ]
         
         # Create missing categories if needed
@@ -654,7 +673,7 @@ def get_categorization_service() -> CategorizationService:
             existing_categories = self._load_categories(user_id)
             candidates = [
                 cat for cat in existing_categories
-                if cat.label in suggested_categories
+                if cat['label'] in suggested_categories
             ]
         
         # If still no candidates, use all categories
@@ -771,7 +790,6 @@ def get_categorization_service() -> CategorizationService:
         
         except Exception as e:
             logger.error(f"Failed to update category centroid with learning: {e}")
-
 
     return _categorization_service
 

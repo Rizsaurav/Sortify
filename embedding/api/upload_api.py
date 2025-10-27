@@ -8,14 +8,13 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
 
 from models import DocumentUploadResponse, TaskStatusResponse, FileCategoryResponse
 from services import get_document_service, get_categorization_service
 from core import get_database_service
 from utils import get_logger
 from api.task_manager import get_task_manager
-from classifier import get_hybrid_pipeline
 
 logger = get_logger(__name__)
 
@@ -117,6 +116,31 @@ async def upload_document(
     except Exception as e:
         logger.error(f"Upload failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+@router.get("/documents")
+async def get_documents(user_id: str = Query(...)):
+    """
+    Get all documents for a user.
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        List of documents
+    """
+    try:
+        db_service = get_database_service()
+        documents = db_service.get_documents_by_user(user_id)
+        
+        return {
+            "success": True,
+            "documents": documents,
+            "count": len(documents)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get documents: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch documents")
 
 
 @router.get("/task-status/{task_id}", response_model=TaskStatusResponse)
@@ -283,89 +307,5 @@ async def initialize_user_categories(user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/record-correction")
-async def record_user_correction(
-    document_id: str = Form(...),
-    predicted_category: str = Form(...),
-    final_category: str = Form(...),
-    predicted_confidence: float = Form(...),
-    user_id: str = Form(...),
-    filename: str = Form("")
-):
-    """
-    Record when user manually corrects a categorization.
-    """
-    try:
-        pipeline = get_hybrid_pipeline()
-        
-        success = pipeline.record_user_correction(
-            user_id=user_id,
-            document_id=document_id,
-            predicted_category=predicted_category,
-            final_category=final_category,
-            predicted_confidence=predicted_confidence,
-            filename=filename
-        )
-        
-        if success:
-            return {
-                "success": True,
-                "message": "User correction recorded successfully",
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to record correction")
-            
-    except Exception as e:
-        logger.error(f"Failed to record user correction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/system-status")
-async def get_system_status():
-    """
-    Get system status for all classifier components.
-    """
-    try:
-        pipeline = get_hybrid_pipeline()
-        status = pipeline.get_system_status()
-        
-        return {
-            "status": "healthy" if all(status.get(k, {}).get('active', False) for k in status.keys() if k != 'timestamp') else "degraded",
-            "components": status,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to get system status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/health")
-async def health_check():
-    """
-    Simple health check endpoint for classifier system.
-    """
-    try:
-        pipeline = get_hybrid_pipeline()
-        status = pipeline.get_system_status()
-        
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "components": {
-                "reference_classifier": status.get("reference_classifier", {}).get("trained", False),
-                "user_preferences": status.get("user_preferences", {}).get("active", False),
-                "drift_control": status.get("drift_control", {}).get("active", False),
-                "ux_hooks": status.get("ux_hooks", {}).get("active", False)
-            }
-        }
-        
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
 
 
