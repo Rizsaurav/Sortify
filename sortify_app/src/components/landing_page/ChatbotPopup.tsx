@@ -8,14 +8,8 @@ interface Message {
   timestamp: Date;
 }
 
-interface ChatbotPopupProps {
-  isOpen?: boolean;
-  onOpenChange?: (isOpen: boolean) => void;
-  initialMessage?: string;
-}
-
-export default function ChatbotPopup({ isOpen: externalIsOpen, onOpenChange, initialMessage }: ChatbotPopupProps) {
-  const [internalIsOpen, setInternalIsOpen] = useState(false);
+export default function ChatbotPopup() {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -28,10 +22,6 @@ export default function ChatbotPopup({ isOpen: externalIsOpen, onOpenChange, ini
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Use external control if provided, otherwise use internal state
-  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
-  const setIsOpen = onOpenChange || setInternalIsOpen;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,13 +36,6 @@ export default function ChatbotPopup({ isOpen: externalIsOpen, onOpenChange, ini
       inputRef.current.focus();
     }
   }, [isOpen]);
-
-  // Handle initial message when chatbot opens
-  useEffect(() => {
-    if (isOpen && initialMessage && initialMessage.trim()) {
-      setInputMessage(initialMessage);
-    }
-  }, [isOpen, initialMessage]);
 
   const generateBotResponse = (userMessage: string): string => {
     const lowerMessage = userMessage.toLowerCase();
