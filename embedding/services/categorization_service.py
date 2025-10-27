@@ -204,7 +204,7 @@ class CategorizationService:
         filename: str
     ) -> Dict[str, Any]:
         """
-        Categorize document using hybrid approach (semantic + keywords).
+        Enhanced hybrid categorization with multi-pass analysis and confidence scoring.
         
         Args:
             document_id: Document ID
@@ -214,7 +214,7 @@ class CategorizationService:
             filename: Document filename (for keyword hints)
         
         Returns:
-            Categorization result
+            Categorization result with confidence scoring
         """
         try:
             logger.info(f"Hybrid categorizing document {document_id}")
@@ -248,66 +248,56 @@ class CategorizationService:
                         'default': True
                     }
             
-            # Step 1: Keyword-based hints
-            suggested_categories = self.detect_category_from_keywords(content, filename)
-            logger.info(f"Keyword suggestions: {suggested_categories}")
+            # ENHANCED STEP 1: Multi-pass keyword analysis with weights
+            keyword_results = self._enhanced_keyword_analysis(content, filename)
+            suggested_categories = keyword_results['suggestions']
+            keyword_confidence = keyword_results['confidence']
+            logger.info(f"Enhanced keyword suggestions: {suggested_categories} (confidence: {keyword_confidence:.3f})")
             
-            # Step 2: Filter to relevant candidates
-            if suggested_categories:
-                candidates = [
-                    cat for cat in existing_categories
-                    if cat.label in suggested_categories
-                ]
-                # If no matches, create missing categories
-                if not candidates:
-                    logger.info(f"No existing categories match suggestions: {suggested_categories}")
-                    # Create missing categories
-                    for suggested_cat in suggested_categories:
-                        if suggested_cat in self.standard_categories:
-                            logger.info(f"Creating missing standard category: {suggested_cat}")
-                            zero_centroid = np.zeros(self.embedding_service.get_dimension())
-                            category_id = self.db_service.insert_category(
-                                label=suggested_cat,
-                                centroid=zero_centroid,
-                                user_id=user_id
-                            )
-                            logger.info(f"Created category {suggested_cat} with ID {category_id}")
-                    
-                    # Reload categories to include new ones
-                    existing_categories = self._load_categories(user_id)
-                    candidates = [
-                        cat for cat in existing_categories
-                        if cat.label in suggested_categories
-                    ]
-                
-                # If still no candidates, use all categories
-                if not candidates:
-                    candidates = existing_categories
-            else:
-                candidates = existing_categories
+            # ENHANCED STEP 2: Dynamic candidate filtering with confidence
+            candidates = self._get_enhanced_candidates(suggested_categories, existing_categories, user_id)
             
-            # Step 3: Find best semantic match
-            best_match = self._find_best_category(aggregated_embedding, candidates)
+            # ENHANCED STEP 3: Multi-pass semantic matching with confidence scoring
+            semantic_results = self._enhanced_semantic_matching(aggregated_embedding, candidates, content, filename)
+            best_match = semantic_results['best_match']
+            semantic_confidence = semantic_results['confidence']
             
-            # Step 4: Validate with threshold
-            if best_match and best_match['similarity'] >= self.similarity_threshold:
+            # ENHANCED STEP 4: Dynamic threshold with confidence validation
+            dynamic_threshold = self._calculate_dynamic_threshold(
+                best_match['similarity'] if best_match else 0,
+                keyword_confidence,
+                semantic_confidence,
+                len(existing_categories)
+            )
+            
+            if best_match and best_match['similarity'] >= dynamic_threshold:
                 category_id = best_match['category_id']
                 category = best_match['category']
+                
+                # Calculate overall confidence
+                overall_confidence = self._calculate_overall_confidence(
+                    best_match['similarity'],
+                    keyword_confidence,
+                    semantic_confidence,
+                    category.label in suggested_categories
+                )
                 
                 # Update document
                 self.db_service.update_document(document_id, cluster_id=category_id)
                 
-                # Update category centroid
-                self._update_category_centroid(
+                # Enhanced centroid update with learning rate
+                self._update_category_centroid_with_learning(
                     category_id,
                     category,
-                    aggregated_embedding
+                    aggregated_embedding,
+                    overall_confidence
                 )
                 
                 logger.info(
                     f"✓ Assigned to '{category.label}' "
                     f"(similarity: {best_match['similarity']:.3f}, "
-                    f"keyword_match: {category.label in suggested_categories})"
+                    f"confidence: {overall_confidence:.3f}, "
+                    f"threshold: {dynamic_threshold:.3f})"
                 )
                 
                 return {
@@ -316,7 +306,9 @@ class CategorizationService:
                     'category_name': category.label,
                     'is_new': False,
                     'similarity': best_match['similarity'],
-                    'keyword_match': category.label in suggested_categories
+                    'confidence': overall_confidence,
+                    'keyword_match': category.label in suggested_categories,
+                    'dynamic_threshold': dynamic_threshold
                 }
             
             # Step 5: Use best semantic match even if below threshold (no keyword fallback)
@@ -567,6 +559,220 @@ def get_categorization_service() -> CategorizationService:
     global _categorization_service
     if _categorization_service is None:
         _categorization_service = CategorizationService()
+    return _categorization_service
+
+
+    def _enhanced_keyword_analysis(self, content: str, filename: str) -> Dict[str, Any]:
+        """
+        Enhanced keyword analysis with weighted scoring and confidence.
+        """
+        text = f"{filename} {content}".lower()
+        
+        # Enhanced keyword patterns with weights
+        enhanced_keywords = {
+            'Academic Work': {
+                'high': ['assignment', 'homework', 'due', 'problem set', 'quiz', 'test', 'project'],
+                'medium': ['essay', 'paper', 'submission', 'deadline', 'coursework'],
+                'low': ['exercise', 'practice', 'assessment', 'hw', 'pset']
+            },
+            'Science & Tech': {
+                'high': ['programming', 'algorithm', 'code', 'python', 'java', 'software', 'computer'],
+                'medium': ['engineering', 'technical', 'system', 'cs', 'coding'],
+                'low': ['data', 'analysis', 'computing', 'digital', 'tech']
+            },
+            'Research & Papers': {
+                'high': ['research', 'study', 'journal', 'publication', 'thesis', 'paper'],
+                'medium': ['article', 'analysis', 'methodology', 'findings', 'investigation'],
+                'low': ['review', 'survey', 'examination', 'report']
+            }
+        }
+        
+        category_scores = {}
+        total_score = 0
+        
+        for category, keywords in enhanced_keywords.items():
+            score = 0
+            
+            # High weight keywords (3 points)
+            for keyword in keywords['high']:
+                if keyword in text:
+                    score += 3
+            
+            # Medium weight keywords (2 points)
+            for keyword in keywords['medium']:
+                if keyword in text:
+                    score += 2
+            
+            # Low weight keywords (1 point)
+            for keyword in keywords['low']:
+                if keyword in text:
+                    score += 1
+            
+            category_scores[category] = score
+            total_score += score
+        
+        # Calculate confidence based on score distribution
+        if total_score > 0:
+            max_score = max(category_scores.values())
+            confidence = min(max_score / total_score * 2, 1.0)  # Normalize to 0-1
+        else:
+            confidence = 0.0
+        
+        # Get suggestions (top 2 categories)
+        suggestions = sorted(category_scores.keys(), key=lambda k: category_scores[k], reverse=True)[:2]
+        
+        return {
+            'suggestions': suggestions,
+            'confidence': confidence,
+            'scores': category_scores
+        }
+    
+    def _get_enhanced_candidates(self, suggested_categories: List[str], existing_categories: List[Dict], user_id: str) -> List[Dict]:
+        """
+        Enhanced candidate filtering with dynamic category creation.
+        """
+        candidates = [
+            cat for cat in existing_categories
+            if cat.label in suggested_categories
+        ]
+        
+        # Create missing categories if needed
+        if not candidates and suggested_categories:
+            logger.info(f"No existing categories match suggestions: {suggested_categories}")
+            for suggested_cat in suggested_categories:
+                if suggested_cat in self.standard_categories:
+                    logger.info(f"Creating missing standard category: {suggested_cat}")
+                    zero_centroid = np.zeros(self.embedding_service.get_dimension())
+                    category_id = self.db_service.insert_category(
+                        label=suggested_cat,
+                        centroid=zero_centroid,
+                        user_id=user_id
+                    )
+                    logger.info(f"Created category {suggested_cat} with ID {category_id}")
+            
+            # Reload categories
+            existing_categories = self._load_categories(user_id)
+            candidates = [
+                cat for cat in existing_categories
+                if cat.label in suggested_categories
+            ]
+        
+        # If still no candidates, use all categories
+        if not candidates:
+            candidates = existing_categories
+        
+        return candidates
+    
+    def _enhanced_semantic_matching(self, embedding: np.ndarray, candidates: List[Dict], content: str, filename: str) -> Dict[str, Any]:
+        """
+        Enhanced semantic matching with confidence scoring.
+        """
+        if not candidates:
+            return {'best_match': None, 'confidence': 0.0}
+        
+        similarities = []
+        
+        for category in candidates:
+            centroid = self.db_service.parse_embedding(category.get('centroid'))
+            if centroid is not None:
+                similarity = float(np.dot(embedding, centroid) / (
+                    np.linalg.norm(embedding) * np.linalg.norm(centroid) + 1e-8
+                ))
+                similarities.append({
+                    'category_id': category['id'],
+                    'category': category,
+                    'similarity': similarity
+                })
+        
+        if not similarities:
+            return {'best_match': None, 'confidence': 0.0}
+        
+        # Sort by similarity
+        similarities.sort(key=lambda x: x['similarity'], reverse=True)
+        best_match = similarities[0]
+        
+        # Calculate confidence based on similarity distribution
+        if len(similarities) > 1:
+            similarity_gap = best_match['similarity'] - similarities[1]['similarity']
+            confidence = min(best_match['similarity'] + similarity_gap * 0.5, 1.0)
+        else:
+            confidence = best_match['similarity']
+        
+        return {
+            'best_match': best_match,
+            'confidence': confidence,
+            'all_similarities': similarities
+        }
+    
+    def _calculate_dynamic_threshold(self, similarity: float, keyword_confidence: float, semantic_confidence: float, category_count: int) -> float:
+        """
+        Calculate dynamic threshold based on multiple factors.
+        """
+        base_threshold = self.similarity_threshold
+        
+        # Adjust based on confidence levels
+        if keyword_confidence > 0.7 and semantic_confidence > 0.7:
+            # High confidence in both methods - be more lenient
+            threshold = base_threshold - 0.05
+        elif keyword_confidence < 0.3 or semantic_confidence < 0.3:
+            # Low confidence - be more strict
+            threshold = base_threshold + 0.1
+        else:
+            threshold = base_threshold
+        
+        # Adjust based on category density
+        if category_count > 10:
+            threshold += 0.05  # More categories = stricter
+        elif category_count < 5:
+            threshold -= 0.05  # Fewer categories = more lenient
+        
+        # Clamp to reasonable range
+        return max(0.25, min(0.75, threshold))
+    
+    def _calculate_overall_confidence(self, similarity: float, keyword_confidence: float, semantic_confidence: float, keyword_match: bool) -> float:
+        """
+        Calculate overall confidence score.
+        """
+        # Weighted combination
+        weights = {
+            'semantic': 0.5,
+            'keyword': 0.3,
+            'match': 0.2
+        }
+        
+        confidence = (
+            similarity * weights['semantic'] +
+            keyword_confidence * weights['keyword'] +
+            (1.0 if keyword_match else 0.0) * weights['match']
+        )
+        
+        return min(confidence, 1.0)
+    
+    def _update_category_centroid_with_learning(self, category_id: int, category: Dict, new_embedding: np.ndarray, confidence: float):
+        """
+        Update category centroid with adaptive learning rate based on confidence.
+        """
+        try:
+            current_centroid = self.db_service.parse_embedding(category.get('centroid'))
+            if current_centroid is None:
+                return
+            
+            # Adaptive learning rate based on confidence
+            learning_rate = 0.1 * confidence  # Higher confidence = faster learning
+            
+            # Update centroid with learning rate
+            updated_centroid = (1 - learning_rate) * current_centroid + learning_rate * new_embedding
+            updated_centroid = updated_centroid / (np.linalg.norm(updated_centroid) + 1e-8)
+            
+            # Update in database
+            self.db_service.update_category(category_id, centroid=updated_centroid)
+            
+            logger.debug(f"Updated category {category_id} centroid with learning rate {learning_rate:.3f}")
+        
+        except Exception as e:
+            logger.error(f"Failed to update category centroid with learning: {e}")
+
+
     return _categorization_service
 
 

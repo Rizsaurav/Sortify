@@ -99,7 +99,8 @@ class DocumentService:
                     content=chunk.content,
                     embedding=chunk.embedding,
                     word_count=chunk.word_count,
-                    char_count=chunk.char_count
+                    char_count=chunk.char_count,
+                    user_id=user_id
                 )
             
             # 6. Update parent document with metadata

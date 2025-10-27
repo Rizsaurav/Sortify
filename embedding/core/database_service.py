@@ -186,7 +186,8 @@ class DatabaseService:
         content: str,
         embedding: np.ndarray,
         word_count: int,
-        char_count: int
+        char_count: int,
+        user_id: str
     ) -> bool:
         """
         Insert a document chunk.
@@ -199,6 +200,7 @@ class DatabaseService:
             embedding: Chunk embedding
             word_count: Word count
             char_count: Character count
+            user_id: User ID for RLS
         
         Returns:
             Success status
@@ -211,7 +213,8 @@ class DatabaseService:
                 'content': content,
                 'embedding': embedding.tolist(),
                 'word_count': word_count,
-                'char_count': char_count
+                'char_count': char_count,
+                'user_id': user_id
             }
             
             self.client.table('document_chunks').insert(data).execute()
