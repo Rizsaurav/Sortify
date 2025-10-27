@@ -1,5 +1,5 @@
-import React from 'react';
-import { Folder, Home, FileText, Search, Settings, LogOut, User } from 'lucide-react';
+import React, { useState } from 'react';
+import { Folder, Home, FileText, LogOut, User, CheckCircle } from 'lucide-react';
 import type{ CategoryCount, FrequentFolder } from '../types';
 
 interface SidebarProps {
@@ -10,6 +10,7 @@ interface SidebarProps {
   onNavigateToAllFiles: () => void;
   onNavigateToProfile: () => void;
   onSignOut: () => void;
+  onDrop?: (fileId: string, categoryId: number, categoryName: string) => void;
   darkMode: boolean;
 }
 
@@ -21,8 +22,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigateToAllFiles,
   onNavigateToProfile,
   onSignOut,
-  darkMode
+  onDrop
 }) => {
+  const [draggedOverCategory, setDraggedOverCategory] = useState<string | null>(null);
+
+  const handleDragOver = (e: React.DragEvent, categoryName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only accept our custom file cards, not external files
+    const types = e.dataTransfer.types;
+    if (types.includes('application/x-file-card')) {
+      e.dataTransfer.dropEffect = 'move';
+      setDraggedOverCategory(categoryName);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggedOverCategory(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, categoryName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Get our custom data
+    const data = e.dataTransfer.getData('application/x-file-card');
+    if (data) {
+      const { fileId } = JSON.parse(data);
+      if (onDrop && fileId) {
+        // For now, we'll use a placeholder category ID since CategoryCount doesn't have an id
+        // In a real implementation, you'd need to map category names to IDs
+        const categoryId = 1; // This should be replaced with actual category ID lookup
+        onDrop(fileId, categoryId, categoryName);
+      }
+    }
+    setDraggedOverCategory(null);
+  };
   return (
     <aside className="w-64 h-screen bg-sidebar border-r border-sidebar-border fixed left-0 top-0 hidden lg:block shadow-xl">
       <div className="flex flex-col h-full">
@@ -100,18 +138,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <ul className="space-y-1">
               {categoryCount.length > 0 ? categoryCount.map((cat) => (
                 <li key={cat.name}>
-                  <button 
+                  <div
+                    onDragOver={(e) => handleDragOver(e, cat.name)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, cat.name)}
+                    className={`
+                      relative w-full flex items-center gap-3 h-10 px-3 rounded-lg transition-all duration-200
+                      ${draggedOverCategory === cat.name 
+                        ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-400 scale-105 shadow-lg' 
+                        : selectedCategory === cat.name
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }
+                      ${onDrop ? "cursor-pointer" : ""}
+                    `}
                     onClick={() => onCategoryFilter(cat.name)}
-                    className={`w-full flex items-center gap-3 h-10 px-3 rounded-lg transition-all ${
-                      selectedCategory === cat.name
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    }`}
                   >
                     <div className={`w-3 h-3 rounded-full ${cat.color}`} />
                     <span className="flex-1 text-left text-sm">{cat.name}</span>
                     <span className="text-xs px-2 py-0.5 bg-sidebar-accent/50 rounded-full">{cat.count}</span>
-                  </button>
+                    
+                    {/* Smooth Drop Indicator */}
+                    {draggedOverCategory === cat.name && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-10 rounded-lg backdrop-blur-sm">
+                        <span className="text-blue-600 font-semibold flex items-center gap-2 text-xs">
+                          <CheckCircle className="w-4 h-4" />
+                          Drop here
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </li>
               )) : (
                 <li className="px-3 py-2 text-xs text-sidebar-foreground/60">
