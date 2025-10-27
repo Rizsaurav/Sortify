@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Upload, Folder, FileText, Sparkles, CloudUpload, BarChart3, X, Search, Clock, Filter } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Upload, Folder, FileText, Sparkles, CloudUpload, BarChart3, Search, Clock, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ChatbotPopup from '../landing_page/ChatbotPopup';
 import FileDirectory from '../landing_page/FileDirectory';
@@ -10,6 +10,7 @@ import { useFilePreview } from './hooks/useFilePreview';
 import { useSearchAndFilter } from './hooks/useSearchAndFilter';
 import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useUserProfile } from './hooks/useUserProfile';
+import { useCategoryManagement } from './hooks/useCategoryManagement';
 
 // Components
 import { FilePreviewModal } from './components/FilePreviewModal';
@@ -32,12 +33,27 @@ const DEMO_FILES = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+
+  // Prevent browser's default drag-and-drop file upload behavior
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    // Disable default drag behaviors on the entire window
+    window.addEventListener('dragover', preventDefault);
+    window.addEventListener('drop', preventDefault);
+
+    return () => {
+      window.removeEventListener('dragover', preventDefault);
+      window.removeEventListener('drop', preventDefault);
+    };
+  }, []);
 
   // Custom hooks
   const {
@@ -48,6 +64,8 @@ export default function Dashboard() {
     frequentFolders,
     notifications,
     removeNotification,
+    addNotification,
+    fetchFiles,
     handleFileUpload,
     deleteFile,
     renameFile
@@ -71,9 +89,6 @@ export default function Dashboard() {
   const {
     isDragging,
     fileInputRef,
-    handleDragOver,
-    handleDragLeave,
-    handleDrop,
     handleFileInputChange,
     triggerFileInput
   } = useDragAndDrop(handleFileUpload);
@@ -83,19 +98,76 @@ export default function Dashboard() {
     signOut
   } = useUserProfile();
 
+  const {
+    categories,
+    changeFileCategory,
+    fetchCategories
+  } = useCategoryManagement(userProfile?.id || '');
+
   // Use demo files if no real files
   const displayFiles = filteredFiles.length > 0 ? filteredFiles : DEMO_FILES;
+
+  // Wrapper for category change with refresh
+  const handleCategoryChange = async (fileId: string, categoryId: number, categoryName: string) => {
+    try {
+      console.log('🎯 Changing category via edit modal:', { fileId, categoryId, categoryName });
+      
+      // Check if it's a demo file
+      if (fileId.startsWith('demo-')) {
+        console.warn('Cannot change category for demo files');
+        addNotification('⚠️ Cannot change category for demo files', 'info');
+        return;
+      }
+      
+      await changeFileCategory(fileId, categoryId, categoryName, async () => {
+        // Refresh the files list after successful category change
+        await fetchFiles();
+      });
+      
+      // Show success notification
+      addNotification(`✅ File moved to ${categoryName}`, 'success');
+      
+    } catch (error) {
+      console.error('❌ Failed to change file category:', error);
+      addNotification('❌ Failed to move file. Please try again.', 'error');
+    }
+  };
+
+  // Handle drag and drop to categories
+  const handleCategoryDrop = async (fileId: string, categoryId: number, categoryName: string) => {
+    try {
+      console.log('Dropping file:', { fileId, categoryId, categoryName });
+      
+      // Check if it's a demo file
+      if (fileId.startsWith('demo-')) {
+        console.warn('Cannot change category for demo files');
+        addNotification('⚠️ Cannot change category for demo files', 'info');
+        return;
+      }
+      
+      // Call changeFileCategory with success callback
+      await changeFileCategory(fileId, categoryId, categoryName, async () => {
+        // Refresh the files list after successful category change
+        await fetchFiles();
+      });
+      
+      // Show success notification
+      addNotification(`File moved to ${categoryName}`, 'success');
+      
+    } catch (error) {
+      console.error('Failed to change file category:', error);
+      addNotification('Failed to move file. Please try again.', 'error');
+    }
+  };
 
 
 
   const handleDeleteFile = async (fileId: string, fileName: string, storagePath?: string) => {
     try {
       await deleteFile(fileId, fileName, storagePath);
-      setNotification('File deleted successfully!');
-      setTimeout(() => setNotification(null), 3000);
+      // Success notification is handled by the useFileManagement hook
     } catch (error) {
-      setNotification('Delete failed. Please try again.');
-      setTimeout(() => setNotification(null), 3000);
+      // Error notification is handled by the useFileManagement hook
     }
   };
 
@@ -105,11 +177,9 @@ export default function Dashboard() {
         await renameFile(fileId, newFileName.trim());
         setRenamingFileId(null);
         setNewFileName('');
-        setNotification('File renamed successfully!');
-        setTimeout(() => setNotification(null), 3000);
+        // Success notification is handled by the useFileManagement hook
       } catch (error) {
-        setNotification('Rename failed. Please try again.');
-        setTimeout(() => setNotification(null), 3000);
+        // Error notification is handled by the useFileManagement hook
       }
     }
   };
@@ -120,15 +190,6 @@ export default function Dashboard() {
 
   const handleNavigateToProfile = () => {
     navigate('/profile');
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate('/login');
-    } catch (error) {
-      console.error('Sign out failed:', error);
-    }
   };
 
   const formatStorageUsed = (bytes: number): string => {
@@ -161,7 +222,8 @@ export default function Dashboard() {
           onCategoryFilter={handleCategoryFilter}
           onNavigateToAllFiles={handleNavigateToAllFiles}
           onNavigateToProfile={handleNavigateToProfile}
-          onSignOut={handleSignOut}
+          onSignOut={signOut}
+          onDrop={handleCategoryDrop}
           darkMode={darkMode}
         />
 
@@ -179,9 +241,8 @@ export default function Dashboard() {
           {/* Main Content */}
           <main 
             className="flex-1 p-4 lg:p-6 space-y-4 lg:space-y-6"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => e.preventDefault()}
           >
             {/* Drag and Drop Overlay */}
             {isDragging && (
@@ -201,18 +262,9 @@ export default function Dashboard() {
                   <p className="text-muted-foreground text-sm lg:text-base mt-1">Your files are organized and ready to search</p>
                 </div>
                 <label className="w-full lg:w-auto px-6 lg:px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer">
-                  <input ref={fileInputRef} type="file" onChange={handleFileInputChange} className="hidden" accept="*/*" multiple disabled={isUploading} />
-                  {isUploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-5 w-5" />
-                      Upload Files
-                    </>
-                  )}
+                  <input ref={fileInputRef} type="file" onChange={handleFileInputChange} className="hidden" accept="*/*" multiple />
+                  <Upload className="h-5 w-5" />
+                  Upload Files
                 </label>
               </div>
 
@@ -398,16 +450,14 @@ export default function Dashboard() {
                     viewMode={viewMode}
                     renamingFileId={renamingFileId}
                     newFileName={newFileName}
+                    categories={categories}
                     onPreviewFile={handlePreviewFile}
                     onDownloadFile={downloadFile}
                     onDeleteFile={handleDeleteFile}
-                    onRenameFile={(fileId) => {
-                      setRenamingFileId(fileId);
-                      const file = displayFiles.find(f => f.id === fileId);
-                      if (file) setNewFileName(file.name);
-                    }}
                     onFileNameChange={setNewFileName}
                     onConfirmRename={handleRenameFile}
+                        onCategoryChange={handleCategoryChange}
+                    onRefreshCategories={fetchCategories}
                   />
                 )}
               </div>
