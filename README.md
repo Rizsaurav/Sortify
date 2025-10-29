@@ -132,6 +132,16 @@ Contributors
 * **Jira Task: Saurav - Enable uploads being saved to database correctly and notification pop-up**
    * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
 
+  Abhishek Verma Allamneni: "Fixed errors with the account deatils page and addeed a new settings page also made some of the elements responcive on the home page"
+
+* **Jira Task: Abhishek - fixed errors withe account details page**
+   * KAN-64, [Bitbucket](link)
+* **Jira Task: Abhishek - created a new page to access settings page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the file appear on the when selected the right page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the elements on the home page responcive**
+   * KAN-, [Bitbucket](link)
 
 
 ## Reports
@@ -158,7 +168,7 @@ Contributors
 * next steps
 
 **Abhisek**
-
+* Not sure yet need to talk with the team to choose them
 
 List the ready features here:
 - CRUD operations on uploaded files, Feature name: CRUD operations, used by student 
