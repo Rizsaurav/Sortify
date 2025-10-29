@@ -140,6 +140,14 @@ List the ready features here:
 - Automated summarizing of files, Feature name: Document Summarizer, used by student 
 - Efficient Retrieval of data, Feature name: Document Retriever, used by student
 
+## Next steps ( Sprint 2 ) 
+
+Abheek 
+
+**Abheek**
+* Working on optimizing backend
+* Adding full stack features
+* Working on ML features
 
 ## Setup
 What are the project requirements/dependencies? Where are they listed? A requirements.txt or a Pipfile.lock file perhaps? Where is it located?
