@@ -2,10 +2,17 @@ import { supabase } from "./client"
 
 // Fetch current user's profile
 export async function getCurrentProfile() {
-  const { data, error } = await supabase.rpc("current_user_profile")
-  if (error) throw error
-  //  ensure we return single row
-  return Array.isArray(data) ? data[0] : data
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error("No logged-in user")
+  
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+  
+  if (error && error.code !== 'PGRST116') throw error
+  return data
 }
 
 // Insert or update profile
@@ -44,8 +51,13 @@ export async function createProfileIfNotExists() {
     if (!user) throw new Error("No logged-in user")
   
     // Check if profile exists
-    const { data: existingProfile, error: profileError } = await supabase.rpc("current_user_profile")
-    if (profileError) throw profileError
+    const { data: existingProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    
+    if (profileError && profileError.code !== 'PGRST116') throw profileError
   
     if (!existingProfile || existingProfile.length === 0) {
      
