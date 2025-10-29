@@ -103,22 +103,6 @@ Contributors
    * Commits: [Commit 1](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/e7b4461c2798702762eef37ce62890d815f89832), [Commit 2](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/975bffd3b8fd171bbe2d2e381906db61c7ce01a4), [Commit 3](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/98e04d6c3e99740001c868c181f2b6cd43ceb549), [Commit 4](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/0fa3f33e84ae1946cd60ced797d440f46ca592e8)
 
 
-## Reports
-![alt text](./BurnupCharts/image.png)
-
-## Sprint 2
-
-Contributors
-
-  **Abheek**: "story"
-
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
-
   **Aaditya**: "Updated and fixed RAG and properly organized and categorized documents into specific folders"
 
 * **Jira Task: Aaditya - Display "No documents found" message when search returns empty results.**
@@ -190,9 +174,11 @@ Contributors
 * Making the RAG work
 * Fixing state change on changing categories
 
-**Abheek**:
+**Abheek**
+* Working on optimizing backend
+* Adding full stack features
+* Working on ML features
 
-* next steps
 
 **Abhisek**
 * Not sure yet need to talk with the team to choose them
@@ -202,14 +188,6 @@ List the ready features here:
 - Automated categorization, Feature name: Document categorisation, used by student 
 - Change of directories, Feature name: Directory change, used by student
 
-## Next steps ( Sprint 2 ) 
-
-Abheek 
-
-**Abheek**
-* Working on optimizing backend
-* Adding full stack features
-* Working on ML features
 
 ## Setup
 What are the project requirements/dependencies? Where are they listed? A requirements.txt or a Pipfile.lock file perhaps? Where is it located?
