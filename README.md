@@ -110,16 +110,17 @@ Contributors
 * **Jira Task: Aaditya - task**
    * taskid, [Bitbucket](link)
 
-  Shivendra: "story"
+  Shivendra: "As a student, I want to have a smooth user experience of the landing page", 
+             " As a student, I want to access the chatbot feature"
 
-* **Jira Task: Shivendra - task**
-   * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - task**
-   * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - task**
-   * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - task**
-   * KAN-, [Bitbucket](link)
+* **Jira Task: Shivendra - Create the ui of the chatbot**
+   * KAN-85, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-85-create-the-ui-of-the-chatbot)
+* **Jira Task: Shivendra - Add user profile section to the landing page**
+   * KAN-81, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-81-add-user-profile-section)
+* **Jira Task: Shivendra - Restructure files and refactor the CSS of dashboard**
+   * KAN-78, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-78-refactor-the-css-of-dashboard)
+* **Jira Task: Shivendra - Trigger the chatbot feature upon clicking AI Search**
+   * KAN-84, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-84-trigger-the-chatbot-feature-upon-clicking-AI-Search)
 
    **Saurav**: "Set up folder updates, syncing, and renaming, and made sure the frontend connects properly with the backend."
 
@@ -146,7 +147,9 @@ Contributors
 * next steps
 
 **Shivendra**:
- * next steps
+ * Refactor CSS of the landing page
+ * Refactor ui of documents categories 
+ * Implement functional profile section to the dashboard
  
 **Saurav**:
 * Refined Categorization of documents
