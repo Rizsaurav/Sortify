@@ -147,7 +147,9 @@ Contributors
 
 **Aaditya**: 
 
-* next steps
+* Implementing chatbot functionality
+* Integrating Gemini Pro to Chatbot
+* Applying RAG to chatbot to get filtered result
 
 **Shivendra**:
  * next steps
