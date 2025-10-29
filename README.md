@@ -101,14 +101,18 @@ Contributors
 * **Jira Task: Abheek - task**
    * task, [Bitbucket](link)
 
-  **Aaditya**: "Story"
+  **Aaditya**: "Updated and fixed RAG and properly organized and categorized documents into specific folders"
 
-* **Jira Task: Aaditya - task**
-   * KAN-, [Bitbucket](link)
-* **Jira Task: Aaditya - task**
-   * KAN-, [Bitbucket](link)
-* **Jira Task: Aaditya - task**
-   * taskid, [Bitbucket](link)
+* **Jira Task: Aaditya - Display "No documents found" message when search returns empty results.**
+   * KAN-21 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/7fa2624fe8d45a121f609d4a63f6804092fd864e/?at=feature%2FKAN-21-display-no-documents-found)
+* **Jira Task: Aaditya - Categorizing documents to their respective folders**
+   * KAN-22 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/1b98996c4edba5898ec6fb26608d0d46a00c0737/?at=feature%2FKAN-22-assign-document-to-folder)
+* **Jira Task: Aaditya - Adding a working search bar which filters from RAG**
+   * KAN-8, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/655a64102c418ca388e1a7359497a399748f9cb0/?at=feature%2FKAN-8-add-a-working-search-bar)
+* **Jira Task: Aaditya - Showing filtered documents in real-time while typing**
+   * KAN-14, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/64417d1aa73bcf75dc399bfcf59f779bdf6bd94f/?at=feature%2FKAN-14-show-filtered-results-in-real-tim)
+* **Jira Task: Aaditya - Implementing client-side filteration to filter documents**
+   * KAN-13, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/f15f56a83eee0528c57cb56e34afc750364ab0f6/?at=feature%2FKAN-13-implement-simple-client-side-filt)
 
   Shivendra: "As a student, I want to have a smooth user experience of the landing page", 
              " As a student, I want to access the chatbot feature"
@@ -133,6 +137,16 @@ Contributors
 * **Jira Task: Saurav - Enable uploads being saved to database correctly and notification pop-up**
    * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
 
+  Abhishek Verma Allamneni: "Fixed errors with the account deatils page and addeed a new settings page also made some of the elements responcive on the home page"
+
+* **Jira Task: Abhishek - fixed errors withe account details page**
+   * KAN-64, [Bitbucket](link)
+* **Jira Task: Abhishek - created a new page to access settings page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the file appear on the when selected the right page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the elements on the home page responcive**
+   * KAN-, [Bitbucket](link)
 
 
 ## Reports
@@ -144,7 +158,9 @@ Contributors
 
 **Aaditya**: 
 
-* next steps
+* Implementing chatbot functionality
+* Integrating Gemini Pro to Chatbot
+* Applying RAG to chatbot to get filtered result
 
 **Shivendra**:
  * Refactor CSS of the landing page
@@ -161,7 +177,7 @@ Contributors
 * next steps
 
 **Abhisek**
-
+* Not sure yet need to talk with the team to choose them
 
 List the ready features here:
 - CRUD operations on uploaded files, Feature name: CRUD operations, used by student 
