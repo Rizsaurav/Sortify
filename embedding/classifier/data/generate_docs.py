@@ -1,21 +1,3 @@
-"""
-MAXIMUM DIVERSITY Document Generator
-=====================================
-Generates 2,600 documents (20 per category) with MAXIMUM variety.
-
-Features:
-- 20 variations per category = 2,600 total documents
-- Randomized prompts within each category
-- 9 tone variations
-- 8 format styles
-- Multi-lingual content (5%)
-- Realistic noise (15%)
-- Variable word counts
-- Content validation
-
-Time: ~6-8 hours
-Result: BEST POSSIBLE training data for 85-95% accuracy
-"""
 
 import json
 import requests
@@ -48,10 +30,7 @@ class MaximumDiversityGenerator:
     # Multi-lingual content
     LANGUAGES = [
         ("Spanish", "español"),
-        ("French", "français"),
-        ("German", "Deutsch"),
-        ("Chinese", "中文"),
-        ("Japanese", "日本語"),
+
         ("Italian", "italiano"),
     ]
     
@@ -204,11 +183,12 @@ class MaximumDiversityGenerator:
                         "num_ctx": 8192,  # Larger context window
                         "top_p": 0.9,
                         "top_k": 40,
+                        "repeat_penalty": 1.1,  # Reduce repetition
                     }
                 }
                 
                 # Increased timeout for Mixtral - scales with expected tokens
-                timeout = min(240, max(120, max_tokens // 10))
+                timeout = min(300, max(180, max_tokens // 8))
                 
                 response = requests.post(
                     self.ollama_url, 
@@ -220,20 +200,31 @@ class MaximumDiversityGenerator:
                     result = response.json()
                     content = result.get("response", "").strip()
                     
-                    # Validate minimum length (at least 500 words for quality)
-                    if content and len(content.split()) >= 500:
+                    # Validate content quality
+                    word_count = len(content.split())
+                    
+                    # Must have substantial content (at least 300 words)
+                    if word_count >= 300:
                         return content
                     elif attempt < self.retry_count - 1:
-                        print(f"      Attempt {attempt + 1}: Content too short, retrying...")
+                        print(f"      Attempt {attempt + 1}: Only {word_count} words, retrying...")
                         time.sleep(2)
                         continue
                 
+                elif response.status_code == 404:
+                    print(f"      Model not found. Run: ollama pull {self.model_name}")
+                    return ""
+                
             except requests.exceptions.Timeout:
                 if attempt < self.retry_count - 1:
-                    print(f"      Attempt {attempt + 1}: Timeout, retrying with longer wait...")
+                    print(f"      Attempt {attempt + 1}: Timeout, retrying...")
                     time.sleep(5)
                 else:
                     print(f"      Failed: Timeout after {self.retry_count} attempts")
+            
+            except requests.exceptions.ConnectionError:
+                print(f"      Connection error. Is Ollama running?")
+                return ""
             
             except Exception as e:
                 if attempt == self.retry_count - 1:
@@ -411,8 +402,8 @@ class MaximumDiversityGenerator:
         
         return f"{main_type}{random.choice(suffixes)}{ext}"
     
-    def generate_document(self, category: str, variation_num: int) -> Dict[str, Any]:
-        """Generate a single document with maximum diversity."""
+    def generate_document(self, category: str, variation_num: int, max_retries: int = 10) -> Dict[str, Any]:
+        """Generate a single document - retry until success or max attempts."""
         
         # Get randomized prompt
         prompt = self._get_randomized_prompt(category, variation_num)
@@ -421,28 +412,45 @@ class MaximumDiversityGenerator:
         min_words, max_words = self._get_word_count_range(category)
         target_tokens = int((min_words + max_words) / 2 * 1.3)
         
-        # Try to generate
-        for attempt in range(self.retry_count):
-            content = self._call_ollama(prompt, target_tokens)
-            
-            if not content:
-                continue
-            
-            if self._is_duplicate(content):
-                if attempt < self.retry_count - 1:
+        # Keep trying until we get valid content
+        for overall_attempt in range(max_retries):
+            for attempt in range(self.retry_count):
+                content = self._call_ollama(prompt, target_tokens)
+                
+                if not content:
                     continue
+                
+                # Check word count - must be at least minimum
+                word_count = len(content.split())
+                if word_count < min_words * 0.7:  # At least 70% of minimum
+                    if attempt < self.retry_count - 1:
+                        print(f"      Attempt {attempt + 1}: Only {word_count} words, retrying...")
+                        continue
+                
+                if self._is_duplicate(content):
+                    if attempt < self.retry_count - 1:
+                        print(f"      Attempt {attempt + 1}: Duplicate detected, retrying...")
+                        continue
+                
+                # Success - apply noise
+                content = self._inject_realistic_noise(content.strip())
+                
+                filename = self._create_filename(category, variation_num)
+                return {
+                    "filename": filename,
+                    "content": content,
+                    "category": category
+                }
             
-            # Success - apply noise
-            content = self._inject_realistic_noise(content.strip())
-            
-            filename = self._create_filename(category, variation_num)
-            return {
-                "filename": filename,
-                "content": content,
-                "category": category
-            }
+            # If we reach here, all retry_count attempts failed
+            # Try with a slightly modified prompt for next overall attempt
+            if overall_attempt < max_retries - 1:
+                print(f"      Overall attempt {overall_attempt + 1} failed, trying different approach...")
+                prompt = self._get_randomized_prompt(category, variation_num + 1000)  # Different seed
+                time.sleep(3)
         
-        # Failed
+        # Only create placeholder after ALL attempts exhausted
+        print(f"      FAILED after {max_retries * self.retry_count} total attempts")
         filename = self._create_filename(category, variation_num)
         return {
             "filename": filename,
@@ -566,39 +574,63 @@ class MaximumDiversityGenerator:
         
         elapsed = time.time() - start_time
         
+        # Check for placeholders and offer to regenerate
+        placeholder_docs = [d for d in all_docs if "[Placeholder" in d['content']]
+        
         print(f"\nGeneration complete")
         print(f"Total documents: {len(all_docs)}")
-        print(f"Success rate: {(len(all_docs) - failed_count) / len(all_docs) * 100:.1f}%")
+        print(f"Successful: {len(all_docs) - len(placeholder_docs)}")
+        print(f"Failed (placeholders): {len(placeholder_docs)}")
+        print(f"Success rate: {(len(all_docs) - len(placeholder_docs)) / len(all_docs) * 100:.1f}%")
         print(f"Time taken: {elapsed / 60:.1f} minutes ({elapsed / 3600:.1f} hours)")
         print(f"Average rate: {len(all_docs) / elapsed * 60:.1f} documents/minute")
         print(f"Saved to: {output_file}")
+        
+        # Retry failed documents
+        if placeholder_docs and len(placeholder_docs) < 100:
+            print(f"\nRetrying {len(placeholder_docs)} failed documents...")
+            
+            for idx, doc in enumerate(placeholder_docs):
+                print(f"Retry {idx + 1}/{len(placeholder_docs)}: {doc['category']}")
+                
+                # Find the document in all_docs and regenerate
+                for i, d in enumerate(all_docs):
+                    if d['filename'] == doc['filename'] and "[Placeholder" in d['content']:
+                        # Regenerate with fresh attempt
+                        new_doc = self.generate_document(doc['category'], idx + 5000)
+                        if "[Placeholder" not in new_doc['content']:
+                            all_docs[i] = new_doc
+                            print(f"  SUCCESS: Regenerated")
+                        else:
+                            print(f"  FAILED: Still placeholder")
+                        break
+            
+            # Save again with retried docs
+            with open(output_file, 'w') as f:
+                json.dump(all_docs, f, indent=2)
+            
+            final_placeholders = sum(1 for d in all_docs if "[Placeholder" in d['content'])
+            print(f"\nFinal result: {len(all_docs) - final_placeholders}/{len(all_docs)} successful")
         
         return all_docs
 
 
 def main():
-    """Main pipeline."""
-    print("MAXIMUM DIVERSITY DOCUMENT GENERATOR")
-    print("Model: dolphin-mixtral:8x7b")
-    print("Documents: 3,900 (30 per category)")
-    print("Word range: 1,500-5,000 per document")
-    print("Estimated time: 30-45 hours\n")
+
     
     try:
         generator = MaximumDiversityGenerator(model_name="dolphin-mixtral:8x7b")
         
         documents = generator.generate_all_documents(
             docs_per_category=30,
-            output_file="maximum_documents_3900.json"
+            output_file="training_documents_3900.json"
         )
         
         print("\nGeneration complete.")
-        print("Output: maximum_documents_3900.json")
-        print("Next: Generate embeddings and train classifier")
-        
+
     except Exception as e:
         print(f"\nError: {e}")
-        print("Ensure Ollama is running and dolphin-mixtral:8x7b is installed")
+
 
 
 if __name__ == "__main__":
