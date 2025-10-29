@@ -85,37 +85,40 @@ Contributors
 **Jira Task: Saurav - Created a page to access user profile settings**
    * KAN-94, [Bitbucket][(https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/](https://bitbucket.org/%7B48ce9ca7-bb35-4613-92ee-029f8d0e4a21%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/pull-requests/5)
 
-## Sprint 1
+## Reports
+![alt text](./BurnupCharts/image.png)
+
+## Sprint 2
 
 Contributors
 
-  Abheek: "story"
+  **Abheek**: "story"
 
-* **Jira Task: Abheek - Implement document text extraction**
+* **Jira Task: Abheek - task**
    * task, [Bitbucket](link)
-* **Jira Task: Abheek - Create PDF embedding model**
+* **Jira Task: Abheek - task**
    * task, [Bitbucket](link)
-* **Jira Task: Abheek - Build semantic search functionality**
+* **Jira Task: Abheek - task**
    * task, [Bitbucket](link)
 
   **Aaditya**: "Story"
 
-* **Jira Task: Aaditya - FastAPI Backend Project Setup**
+* **Jira Task: Aaditya - task**
    * KAN-, [Bitbucket](link)
-* **Jira Task: Aaditya - HomePage, AboutPage**
+* **Jira Task: Aaditya - task**
    * KAN-, [Bitbucket](link)
-* **Jira Task: Aaditya - Login and Register Link**
+* **Jira Task: Aaditya - task**
    * taskid, [Bitbucket](link)
 
   Shivendra: "story"
 
-* **Jira Task: Shivendra - Create a react app and setup the codebase**
+* **Jira Task: Shivendra - task**
    * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - Start with the ui components for the landing page**
+* **Jira Task: Shivendra - task**
    * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - Design and implement dashboard design**
+* **Jira Task: Shivendra - task**
    * KAN-, [Bitbucket](link)
-* **Jira Task: Shivendra - Add responsiveness and test layout on different screen sizes**
+* **Jira Task: Shivendra - task**
    * KAN-, [Bitbucket](link)
 
    **Saurav**: "Set up folder updates, syncing, and renaming, and made sure the frontend connects properly with the backend."
@@ -130,14 +133,9 @@ Contributors
    * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
 
 
- **Abhishek Verma Allamneni**: "Created a page to access user profile settings and update them"
-
-
-
-
 
 ## Reports
-![alt text](./BurnupCharts/image.png)
+![alt text](./BurnupCharts/sprint2.png)
 
 
 
