@@ -106,39 +106,101 @@ Contributors
 ## Reports
 ![alt text](./BurnupCharts/image.png)
 
+## Sprint 2
+
+Contributors
+
+  **Abheek**: "story"
+
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+
+  **Aaditya**: "Updated and fixed RAG and properly organized and categorized documents into specific folders"
+
+* **Jira Task: Aaditya - Display "No documents found" message when search returns empty results.**
+   * KAN-21 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/7fa2624fe8d45a121f609d4a63f6804092fd864e/?at=feature%2FKAN-21-display-no-documents-found)
+* **Jira Task: Aaditya - Categorizing documents to their respective folders**
+   * KAN-22 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/1b98996c4edba5898ec6fb26608d0d46a00c0737/?at=feature%2FKAN-22-assign-document-to-folder)
+* **Jira Task: Aaditya - Adding a working search bar which filters from RAG**
+   * KAN-8, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/655a64102c418ca388e1a7359497a399748f9cb0/?at=feature%2FKAN-8-add-a-working-search-bar)
+* **Jira Task: Aaditya - Showing filtered documents in real-time while typing**
+   * KAN-14, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/64417d1aa73bcf75dc399bfcf59f779bdf6bd94f/?at=feature%2FKAN-14-show-filtered-results-in-real-tim)
+* **Jira Task: Aaditya - Implementing client-side filteration to filter documents**
+   * KAN-13, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/f15f56a83eee0528c57cb56e34afc750364ab0f6/?at=feature%2FKAN-13-implement-simple-client-side-filt)
+
+  Shivendra: "As a student, I want to have a smooth user experience of the landing page", 
+             " As a student, I want to access the chatbot feature"
+
+* **Jira Task: Shivendra - Create the ui of the chatbot**
+   * KAN-85, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-85-create-the-ui-of-the-chatbot)
+* **Jira Task: Shivendra - Add user profile section to the landing page**
+   * KAN-81, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-81-add-user-profile-section)
+* **Jira Task: Shivendra - Restructure files and refactor the CSS of dashboard**
+   * KAN-78, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/feature%2FKAN-78-refactor-the-css-of-dashboard)
+* **Jira Task: Shivendra - Trigger the chatbot feature upon clicking AI Search**
+   * KAN-84, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-84-trigger-the-chatbot-feature-upon-clicking-AI-Search)
+
+   **Saurav**: "Set up folder updates, syncing, and renaming, and made sure the frontend connects properly with the backend."
+
+* **Jira Task: Saurav - Make sure the frontend retrieves data successfully from the backend endpoint**
+   * KAN-79, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-79-make-sure-the-chatbot-retrieves-d)
+* **Jira Task: Saurav - Add categorization and document services**
+   * KAN-28, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-28-when-a-group-name-changes-or-two-)
+* **Jira Task: Saurav - Created background tasks and added logic to fetch categories**
+   * KAN-30, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-30-create-a-background-%E2%80%9Cdirectory-sy)
+* **Jira Task: Saurav - Enable uploads being saved to database correctly and notification pop-up**
+   * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
+
+  Abhishek Verma Allamneni: "Fixed errors with the account deatils page and addeed a new settings page also made some of the elements responcive on the home page"
+
+* **Jira Task: Abhishek - fixed errors withe account details page**
+   * KAN-64, [Bitbucket](link)
+* **Jira Task: Abhishek - created a new page to access settings page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the file appear on the when selected the right page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Abhishek - made the elements on the home page responcive**
+   * KAN-, [Bitbucket](link)
+
+
+## Reports
+![alt text](./BurnupCharts/sprint2.png)
+
 
 
 ## Next Steps
 
 **Aaditya**: 
 
-* Storing documents into subfolders online
-* Automatically making new sections for different documents
-* Document sorting into different folders
+* Implementing chatbot functionality
+* Integrating Gemini Pro to Chatbot
+* Applying RAG to chatbot to get filtered result
 
 **Shivendra**:
- * Update the ui according to the backend team's needs as they progress
- * Add the chatbot ui
- * Refactor the CSS for Dashboard
+ * Refactor CSS of the landing page
+ * Refactor ui of documents categories 
+ * Implement functional profile section to the dashboard
  
 **Saurav**:
-* Refining RAG for richer output
-* Connecting RAG to the frontend
-* Connecting the backend to the frontend
+* Refined Categorization of documents
+* Making the RAG work
+* Fixing state change on changing categories
 
 **Abheek**:
 
-* Working on optimizing database queries
-* Optimizing the output of RAG model 
-* Effectively storing the embeddings 
+* next steps
 
 **Abhisek**
-
+* Not sure yet need to talk with the team to choose them
 
 List the ready features here:
-- Document organization system, Feature name: Document Organizer, used by student 
-- Automated summarizing of files, Feature name: Document Summarizer, used by student 
-- Efficient Retrieval of data, Feature name: Document Retriever, used by student
+- CRUD operations on uploaded files, Feature name: CRUD operations, used by student 
+- Automated categorization, Feature name: Document categorisation, used by student 
+- Change of directories, Feature name: Directory change, used by student
 
 
 ## Setup
