@@ -86,6 +86,23 @@ Contributors
    * KAN-94, [Bitbucket][(https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/](https://bitbucket.org/%7B48ce9ca7-bb35-4613-92ee-029f8d0e4a21%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/pull-requests/5)
 
 
+## Sprint 2
+
+Contributors
+
+  **Abheek**: "Optimized document processing with streaming, memory management, and progressive loading for better performance"
+
+* **Jira Task: Abheek - Implement streaming PDF processing with document chunking strategy**
+   * [KAN-55](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-55), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-55-implement-streaming-pdf-processin/)
+   * Commits: [Commit 1](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/03f34317ba9fe2d51f92bc9414d9b41a57aecd78), [Commit 2](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/ec9f6c68e6d587654ff6eec6112b9fe75fdebe45), [Commit 3](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/66738e656742313b1b183d3286652f15e21696c3)
+* **Jira Task: Abheek - Build memory pool management system with background job queue**
+   * [KAN-56](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-56), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-56-build-memory-pool-management-syst/)
+   * Commits: [Commit 1](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/f65483685eb9835d8b8f2df98dcd741e08d2a6ca), [Commit 2](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/371a042734ca07647c8c3a6e4b2ecf477d58b67f), [Commit 3](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/f51e35d467e8bd2ff99c0eb92ee6674d5cce00d6), [Commit 4](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/6cf8e1d87ad714c58b2671e5756c9878fbc51131), [Commit 5](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/677c63039b04c617188244fe8973cadeb3ee3726)
+* **Jira Task: Abheek - Add progressive loading and lazy evaluation for document content display**
+   * [KAN-57](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-57), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-57-add-progressive-loading-and-lazy-/)
+   * Commits: [Commit 1](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/e7b4461c2798702762eef37ce62890d815f89832), [Commit 2](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/975bffd3b8fd171bbe2d2e381906db61c7ce01a4), [Commit 3](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/98e04d6c3e99740001c868c181f2b6cd43ceb549), [Commit 4](https://bitbucket.org/%7B%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/commits/0fa3f33e84ae1946cd60ced797d440f46ca592e8)
+
+
 ## Reports
 ![alt text](./BurnupCharts/image.png)
 
