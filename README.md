@@ -85,6 +85,56 @@ Contributors
 **Jira Task: Saurav - Created a page to access user profile settings**
    * KAN-94, [Bitbucket][(https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/](https://bitbucket.org/%7B48ce9ca7-bb35-4613-92ee-029f8d0e4a21%7D/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/pull-requests/5)
 
+## Sprint 1
+
+Contributors
+
+  Abheek: "story"
+
+* **Jira Task: Abheek - Implement document text extraction**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - Create PDF embedding model**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - Build semantic search functionality**
+   * task, [Bitbucket](link)
+
+  **Aaditya**: "Story"
+
+* **Jira Task: Aaditya - FastAPI Backend Project Setup**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Aaditya - HomePage, AboutPage**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Aaditya - Login and Register Link**
+   * taskid, [Bitbucket](link)
+
+  Shivendra: "story"
+
+* **Jira Task: Shivendra - Create a react app and setup the codebase**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Shivendra - Start with the ui components for the landing page**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Shivendra - Design and implement dashboard design**
+   * KAN-, [Bitbucket](link)
+* **Jira Task: Shivendra - Add responsiveness and test layout on different screen sizes**
+   * KAN-, [Bitbucket](link)
+
+   **Saurav**: "Set up folder updates, syncing, and renaming, and made sure the frontend connects properly with the backend."
+
+* **Jira Task: Saurav - Make sure the frontend retrieves data successfully from the backend endpoint**
+   * KAN-79, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-79-make-sure-the-chatbot-retrieves-d)
+* **Jira Task: Saurav - Add categorization and document services**
+   * KAN-28, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-28-when-a-group-name-changes-or-two-)
+* **Jira Task: Saurav - Created background tasks and added logic to fetch categories**
+   * KAN-30, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-30-create-a-background-%E2%80%9Cdirectory-sy)
+* **Jira Task: Saurav - Enable uploads being saved to database correctly and notification pop-up**
+   * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
+
+
+ **Abhishek Verma Allamneni**: "Created a page to access user profile settings and update them"
+
+
+
+
 
 ## Reports
 ![alt text](./BurnupCharts/image.png)
@@ -95,33 +145,27 @@ Contributors
 
 **Aaditya**: 
 
-* Storing documents into subfolders online
-* Automatically making new sections for different documents
-* Document sorting into different folders
+* next steps
 
 **Shivendra**:
- * Update the ui according to the backend team's needs as they progress
- * Add the chatbot ui
- * Refactor the CSS for Dashboard
+ * next steps
  
 **Saurav**:
-* Refining RAG for richer output
-* Connecting RAG to the frontend
-* Connecting the backend to the frontend
+* Refined Categorization of documents
+* Making the RAG work
+* Fixing state change on changing categories
 
 **Abheek**:
 
-* Working on optimizing database queries
-* Optimizing the output of RAG model 
-* Effectively storing the embeddings 
+* next steps
 
 **Abhisek**
 
 
 List the ready features here:
-- Document organization system, Feature name: Document Organizer, used by student 
-- Automated summarizing of files, Feature name: Document Summarizer, used by student 
-- Efficient Retrieval of data, Feature name: Document Retriever, used by student
+- CRUD operations on uploaded files, Feature name: CRUD operations, used by student 
+- Automated categorization, Feature name: Document categorisation, used by student 
+- Change of directories, Feature name: Directory change, used by student
 
 
 ## Setup
