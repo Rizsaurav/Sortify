@@ -23,6 +23,7 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 
 from config import RAGConfig
+from memory_pool import get_memory_pool, get_worker_pool
 
 # Load environment variables
 load_dotenv()
@@ -70,31 +71,36 @@ class FastRAG:
     
     def __init__(self, config: Optional[RAGConfig] = None):
         """Initialize RAG system with configuration."""
-        
+
         # Configuration
         self.config = config or RAGConfig.from_env()
         self.config.validate()
-        
+
         # Paths
         self.documents_dir = Path(self.config.documents_dir)
         self.storage_dir = Path(self.config.embeddings_storage_path)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Components
         self.embedding_model = None
         self.llm_model = None
         self.documents: List[Document] = []
         self.chunks: List[Chunk] = []
-        
+
+        # Memory and worker pools
+        self.memory_pool = get_memory_pool()
+        self.worker_pool = get_worker_pool(max_workers=self.config.max_workers)
+
         # Storage files
         self.embeddings_file = self.storage_dir / "document_embeddings.npy"
         self.metadata_file = self.storage_dir / "document_metadata.pkl"
-        
+
         # Initialize models
         self._load_models()
-        
+
         logger.info(f"FastRAG initialized: {self.config.max_workers} workers, chunk_size={self.config.chunk_size}")
         logger.info(f"Using embedding model: {self.config.embedding_model_name}")
+        logger.info(f"Memory pool: {self.memory_pool.get_stats()}")
     
     def _load_models(self):
         """Load embedding and LLM models."""
@@ -218,39 +224,54 @@ class FastRAG:
         logger.info(f"Created {len(self.chunks)} chunks")
         return self.chunks
     
-    def _generate_embeddings_batch(self, chunk_batch: List[Chunk]) -> List[Chunk]:
-        """Generate embeddings for a batch of chunks."""
-        texts = [chunk.content for chunk in chunk_batch]
-        embeddings = self.embedding_model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
-        
-        for chunk, embedding in zip(chunk_batch, embeddings):
-            chunk.embedding = embedding
-        
-        return chunk_batch
+    def _generate_embeddings_batch(self, chunk_batch: List[Chunk], worker_id: int = 0) -> List[Chunk]:
+        """Generate embeddings for a batch of chunks with worker pool."""
+        if not self.worker_pool.acquire_worker(worker_id):
+            logger.warning(f"Worker {worker_id} could not be acquired")
+            return chunk_batch
+
+        try:
+            texts = [chunk.content for chunk in chunk_batch]
+            embeddings = self.embedding_model.encode(texts, convert_to_numpy=True, show_progress_bar=False)
+
+            for chunk, embedding in zip(chunk_batch, embeddings):
+                chunk.embedding = embedding
+                # Store in memory pool for reuse
+                self.memory_pool.allocate(f"emb_{chunk.chunk_id}", embedding)
+
+            return chunk_batch
+        finally:
+            self.worker_pool.release_worker(worker_id)
     
     def generate_embeddings(self, batch_size: int = 32) -> List[Chunk]:
-        """Generate embeddings for all chunks in parallel."""
+        """Generate embeddings for all chunks with memory pool."""
         if not self.chunks:
             raise ValueError("No chunks available")
-        
+
+        # Check memory before processing
+        if self.memory_pool.should_cleanup():
+            logger.warning("Memory usage high, performing cleanup")
+            self.memory_pool._cleanup_lru()
+
         # Create batches
         batches = [
             self.chunks[i:i + batch_size]
             for i in range(0, len(self.chunks), batch_size)
         ]
-        
-        # Process batches in parallel
+
+        # Process batches with worker pool
         with ThreadPoolExecutor(max_workers=min(self.config.max_workers, len(batches))) as executor:
             futures = [
-                executor.submit(self._generate_embeddings_batch, batch)
-                for batch in batches
+                executor.submit(self._generate_embeddings_batch, batch, idx)
+                for idx, batch in enumerate(batches)
             ]
-            
-            # Show progress
+
             for future in tqdm(as_completed(futures), total=len(futures), desc="Generating embeddings"):
                 future.result()
-        
+
+        pool_stats = self.memory_pool.get_stats()
         logger.info(f"Generated embeddings for {len(self.chunks)} chunks")
+        logger.info(f"Memory pool: {pool_stats['current_size_mb']:.2f}MB used, {pool_stats['utilization']:.1%} utilization")
         return self.chunks
     
     def save_embeddings(self) -> None:
@@ -624,29 +645,48 @@ Provide a clear, concise answer based on the context above."""
         
         return stats
     
+    def cleanup_resources(self):
+        """Cleanup memory pool resources."""
+        logger.info("Cleaning up resources")
+        self.memory_pool.clear()
+        pool_stats = self.memory_pool.get_stats()
+        worker_stats = self.worker_pool.get_stats()
+        logger.info(f"Cleanup complete - Memory pool: {pool_stats}, Workers: {worker_stats}")
+
+    def get_resource_stats(self) -> Dict:
+        """Get memory and worker pool statistics."""
+        return {
+            'memory_pool': self.memory_pool.get_stats(),
+            'worker_pool': self.worker_pool.get_stats(),
+            'system_memory': {
+                'percent': self.memory_pool.get_memory_stats().percent,
+                'available_mb': self.memory_pool.get_memory_stats().available_mb
+            }
+        }
+
     def interactive_qa(self):
         """Interactive question-answering session."""
         print("\n🤖 Interactive Q&A")
         print("Type 'quit' to exit")
         print("-" * 30)
-        
+
         while True:
             try:
                 question = input("\n❓ Question: ").strip()
-                
+
                 if question.lower() in ['quit', 'exit', 'q']:
                     print("👋 Goodbye!")
                     break
-                
+
                 if not question:
                     continue
-                
+
                 result = self.answer_question(question)
-                
+
                 print(f"\n✅ Answer: {result['answer']}")
                 print(f"⏱️  Time: {result['response_time']:.2f}s")
                 print(f"📚 Sources: {', '.join(result['sources'])}")
-                
+
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
                 break

@@ -86,28 +86,11 @@ class DatabaseService:
         try:
             response = self.client.table('documents').select('*').execute()
             
-            # For test users or when no user_id, return all documents to see the full system
-            if not user_id or user_id.startswith('test-') or user_id.startswith('123e4567'):
-                docs = response.data
-            else:
-                # Filter by user_id in metadata (RLS should handle this, but double-check)
-                docs = [
-                    doc for doc in response.data
-                    if doc.get('metadata', {}).get('user_id') == user_id
-                ]
-            
-            # Get categories for category names
-            categories_response = self.client.table('clusters').select('id,label').execute()
-            categories_map = {cat['id']: cat['label'] for cat in categories_response.data}
-            
-            # Add category names to documents
-            for doc in docs:
-                cluster_id = doc.get('cluster_id')
-                if cluster_id and cluster_id in categories_map:
-                    doc['category_name'] = categories_map[cluster_id]
-                else:
-                    doc['category_name'] = 'General Documents'
-            
+            # Filter by user_id in metadata (RLS should handle this, but double-check)
+            docs = [
+                doc for doc in response.data
+                if doc.get('metadata', {}).get('user_id') == user_id
+            ]
             return docs
         
         except Exception as e:
@@ -142,25 +125,9 @@ class DatabaseService:
         content: str,
         embedding: np.ndarray,
         word_count: int,
-        char_count: int,
-        user_id: str
+        char_count: int
     ) -> bool:
-        """
-        Insert a document chunk.
-        
-        Args:
-            chunk_id: Chunk ID
-            document_id: Parent document ID
-            chunk_index: Chunk index
-            content: Chunk content
-            embedding: Chunk embedding
-            word_count: Word count
-            char_count: Character count
-            user_id: User ID for RLS
-        
-        Returns:
-            Success status
-        """
+
         try:
             data = {
                 'id': chunk_id,
@@ -172,34 +139,12 @@ class DatabaseService:
                 'char_count': char_count
             }
             
-            # Skip user_id for test users to avoid foreign key constraint errors
-            # Real users will have their user_id set by the frontend with valid auth.users entries
-            if user_id and not user_id.startswith('test-') and not user_id.startswith('123e4567'):
-                data['user_id'] = user_id
-            
             self.client.table('document_chunks').insert(data).execute()
             logger.debug(f"Inserted chunk {chunk_index} for document {document_id}")
             return True
         
         except Exception as e:
             logger.error(f"Failed to insert chunk: {e}")
-            return False
-    
-    def _is_valid_uuid(self, uuid_string: str) -> bool:
-        """
-        Check if a string is a valid UUID format.
-        
-        Args:
-            uuid_string: String to validate
-            
-        Returns:
-            True if valid UUID format, False otherwise
-        """
-        try:
-            import uuid
-            uuid.UUID(uuid_string)
-            return True
-        except ValueError:
             return False
     
     def get_chunks_by_document(self, document_id: str) -> List[Dict[str, Any]]:
@@ -240,12 +185,9 @@ class DatabaseService:
         try:
             data = {
                 'label': label,
-                'centroid': centroid.tolist()
+                'centroid': centroid.tolist(),
+                'user_id': user_id
             }
-            
-            # Skip user_id for test users to avoid foreign key constraint errors
-            if user_id and not user_id.startswith('test-') and not user_id.startswith('123e4567'):
-                data['user_id'] = user_id
             
             response = self.client.table('clusters').insert(data).execute()
             category_id = response.data[0]['id']
@@ -278,13 +220,9 @@ class DatabaseService:
     def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         
         try:
-            # For test users or when no user_id, return all categories
-            if not user_id or user_id.startswith('test-') or user_id.startswith('123e4567'):
-                response = self.client.table('clusters').select('*').execute()
-            else:
-                response = self.client.table('clusters').select('*').eq(
-                    'user_id', user_id
-                ).execute()
+            response = self.client.table('clusters').select('*').eq(
+                'user_id', user_id
+            ).execute()
             
             return response.data
         

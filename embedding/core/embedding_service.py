@@ -1,52 +1,39 @@
 """
 Embedding service - Single responsibility: Generate embeddings from text.
-Handles all embedding model loading and inference with memory pooling.
+Handles all embedding model loading and inference.
 """
 
 import numpy as np
 from typing import List, Optional, Union
 from sentence_transformers import SentenceTransformer
-import sys
-import os
-
-# Add parent directory to path for memory_pool import
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import get_logger
 from config import get_settings, get_model_config
-from memory_pool import get_memory_pool
 
 logger = get_logger(__name__)
 
 
 class EmbeddingService:
-
+    
     def __init__(
         self,
         model_name: Optional[str] = None,
-        device: Optional[str] = None,
-        use_memory_pool: bool = True
+        device: Optional[str] = None
     ):
         config = get_model_config()
-
+        
         self.model_name = model_name or config.embedding_model_name
         self.device = device or config.device
         self.embedding_dim = config.embedding_dim
-        self.use_memory_pool = use_memory_pool
-
+        
         logger.info(f"Loading embedding model: {self.model_name} on device: {self.device}")
-
+        
         try:
             self.model = SentenceTransformer(self.model_name, device=self.device)
             logger.info(f"✓ Embedding model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             raise
-
-        # Initialize memory pool
-        if self.use_memory_pool:
-            self.memory_pool = get_memory_pool(buffer_size=self.embedding_dim, initial_buffers=5)
-            logger.info("✓ Memory pool initialized for embedding service")
     
     def encode(
         self,
@@ -112,15 +99,12 @@ class EmbeddingService:
         return self.embedding_dim
     
     def get_model_info(self) -> dict:
-        info = {
+        return {
             "model_name": self.model_name,
             "dimension": self.embedding_dim,
             "device": self.device,
             "max_seq_length": getattr(self.model, 'max_seq_length', 'unknown')
         }
-        if self.use_memory_pool:
-            info["memory_pool"] = self.memory_pool.get_stats()
-        return info
 
 
 # Singleton instance
