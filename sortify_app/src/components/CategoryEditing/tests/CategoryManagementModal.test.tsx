@@ -75,7 +75,51 @@ describe("CategoryManagementModal Component", () => {
   
 
 
- 
+  it("switches to manage tab and renders existing categories", () => {
+    renderModal();
+    fireEvent.click(screen.getByText("Manage Categories"));
+    expect(screen.getByText("Finance")).toBeInTheDocument();
+    expect(screen.getByText("Reports")).toBeInTheDocument();
+  });
+
+  it("starts edit mode and saves changes", async () => {
+    renderModal();
+    fireEvent.click(screen.getByText("Manage Categories"));
+
+    // Enter edit mode
+    const editButton = screen.getAllByTitle("Edit category")[0];
+    fireEvent.click(editButton);
+
+    const input = screen.getByDisplayValue("Finance");
+    fireEvent.change(input, { target: { value: "Finance Updated" } });
+
+    // Find and click Save
+    const saveButton = screen
+      .getAllByRole("button")
+      .find((btn) => /Save/i.test(btn.textContent || ""));
+    fireEvent.click(saveButton!);
+
+    // Wait for callback
+    await waitFor(() =>
+      expect(mockHandlers.onEditCategory).toHaveBeenCalledWith(
+        1,
+        "Finance Updated",
+        expect.stringMatching(/^#/),
+        expect.any(String)
+      )
+    );
+  });
+
+  it("deletes a category when confirmed", () => {
+    vi.spyOn(window, "confirm").mockReturnValueOnce(true);
+    renderModal();
+
+    fireEvent.click(screen.getByText("Manage Categories"));
+    const deleteButtons = screen.getAllByTitle("Delete category");
+    fireEvent.click(deleteButtons[0]);
+
+    expect(mockHandlers.onDeleteCategory).toHaveBeenCalledWith(1);
+  });
 
 
   it("calls onClose when the close button is clicked", () => {
