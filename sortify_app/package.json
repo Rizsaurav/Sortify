@@ -9,7 +9,6 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest"
-
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -29,8 +28,9 @@
   "devDependencies": {
     "@eslint/js": "^9.36.0",
     "@tailwindcss/postcss": "^4.1.13",
+    "@testing-library/dom": "^9.3.4",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.1",
     "@types/postcss-load-config": "^2.0.1",
     "@types/react": "^19.1.13",
@@ -42,7 +42,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.4.0",
-    "jsdom": "^27.0.1",
+    "jsdom": "^22.1.0",
     "postcss-load-config": "^6.0.1",
     "stylelint": "^16.24.0",
     "stylelint-config-standard": "^39.0.0",
