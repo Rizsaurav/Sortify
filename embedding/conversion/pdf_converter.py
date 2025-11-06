@@ -307,11 +307,12 @@ class PDFConverter:
         if self.output_dir.exists():
             for file in self.output_dir.glob("*.txt"):
                 if file.stem not in pdf_stems:
-                    # Check if this might be a PDF-derived file
-                    cache_hash = self.cache_dir / f"{file.stem}.hash"
-                    if cache_hash.exists():
-                        logger.info(f"🗑️  Removing orphaned output file: {file.name}")
-                        file.unlink()
+                    # --- FIXED LOGIC ---
+                    # The old logic incorrectly checked for a .hash file,
+                    # which would have been deleted by the step above.
+                    # This is the correct, simpler logic.
+                    logger.info(f"🗑️  Removing orphaned output file: {file.name}")
+                    file.unlink()
 
 
 def main():
