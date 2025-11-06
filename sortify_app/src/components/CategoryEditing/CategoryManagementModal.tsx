@@ -55,10 +55,12 @@ export const CategoryManagementModal: React.FC<CategoryManagementModalProps> = (
 
   const handleCreateCategory = () => {
     if (newCategoryName.trim()) {
-      onCreateCategory(newCategoryName.trim(), selectedColor, categoryType.trim());
-      setNewCategoryName('');
-      setSelectedColor(PREDEFINED_COLORS[0]);
-      setCategoryType('');
+      setTimeout(() => {
+        onCreateCategory(newCategoryName.trim(), selectedColor, categoryType.trim());
+        setNewCategoryName('');
+        setSelectedColor(PREDEFINED_COLORS[0]);
+        setCategoryType('');
+      }, 0);
     }
   };
 
