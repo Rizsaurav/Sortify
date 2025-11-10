@@ -64,26 +64,36 @@ class DocumentService:
                 logger.info(f"Duplicate found: {duplicate_id}")
                 raise ValueError(f"Duplicate document: {duplicate_id}")
             
-            # 2. Chunk the document
-            chunks_text = self.chunking_service.chunk_text(content, preprocess=True)
-            
-            if not chunks_text:
+            # 2. Chunk the document with metadata
+            chunks_with_metadata = self.chunking_service.chunk_text(
+                content,
+                preprocess=True,
+                return_metadata=True
+            )
+
+            if not chunks_with_metadata:
                 raise ValueError("No chunks generated from document")
-            
-            logger.info(f"Generated {len(chunks_text)} chunks")
-            
-            # 3. Create chunk objects
+
+            logger.info(f"Generated {len(chunks_with_metadata)} chunks")
+
+            # 3. Create chunk objects with enriched metadata
             chunks = []
-            for idx, chunk_content in enumerate(chunks_text):
+            for chunk_meta in chunks_with_metadata:
                 chunk = Chunk(
                     chunk_id=str(uuid.uuid4()),
                     document_id=document_id,
-                    chunk_index=idx,
-                    content=chunk_content,
+                    chunk_index=chunk_meta['chunk_index'],
+                    content=chunk_meta['content'],
                     embedding=None,  # Will be set next
-                    word_count=len(chunk_content.split()),
-                    char_count=len(chunk_content),
-                    metadata={'filename': filename}
+                    word_count=chunk_meta['word_count'],
+                    char_count=chunk_meta['char_count'],
+                    metadata={
+                        'filename': filename,
+                        'token_count': chunk_meta['token_count'],
+                        'char_position': chunk_meta['char_position'],
+                        'relative_position': chunk_meta['relative_position'],
+                        'total_chunks': chunk_meta['total_chunks']
+                    }
                 )
                 chunks.append(chunk)
             
