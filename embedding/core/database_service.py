@@ -125,7 +125,10 @@ class DatabaseService:
         content: str,
         embedding: np.ndarray,
         word_count: int,
-        char_count: int
+        char_count: int,
+        token_count: Optional[float] = None,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> bool:
 
         try:
@@ -135,14 +138,26 @@ class DatabaseService:
                 'chunk_index': chunk_index,
                 'content': content,
                 'embedding': embedding.tolist(),
-                'word_count': word_count,
-                'char_count': char_count
+                'word_count': int(word_count),  # Ensure int for database
+                'char_count': int(char_count)  # Ensure int for database
             }
-            
+
+            # Add token_count if provided (as float for precision)
+            if token_count is not None:
+                data['token_count'] = float(token_count)
+
+            # Add user_id if provided
+            if user_id is not None:
+                data['user_id'] = user_id
+
+            # Add metadata if provided
+            if metadata is not None:
+                data['metadata'] = metadata
+
             self.client.table('document_chunks').insert(data).execute()
             logger.debug(f"Inserted chunk {chunk_index} for document {document_id}")
             return True
-        
+
         except Exception as e:
             logger.error(f"Failed to insert chunk: {e}")
             return False
