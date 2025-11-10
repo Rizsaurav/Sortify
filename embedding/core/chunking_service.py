@@ -1,10 +1,13 @@
 """
 Chunking service - Single responsibility: Split documents into semantic chunks.
 Handles all text chunking logic with sentence-aware splitting.
+Uses token-based counting for accurate chunk sizing.
+Supports async operations and streaming for large documents.
 """
 
 import re
-from typing import List
+import asyncio
+from typing import List, Optional, AsyncGenerator, Dict
 from utils import get_logger, TextProcessor
 from config import get_settings
 
@@ -12,304 +15,650 @@ logger = get_logger(__name__)
 
 
 class ChunkingService:
-    """
-    Handles text chunking with semantic awareness.
-    
-    Strategies:
-    - Paragraph-aware chunking (respects natural text boundaries)
-    - Sentence-based chunking with smart overlap
-    - Adaptive refinement for optimal chunk quality
-    """
-    
+
     def __init__(
         self,
         chunk_size: int = None,
         chunk_overlap: int = None,
         min_chunk_size: int = 50,
-        respect_paragraphs: bool = True,
-        respect_headings: bool = True,
-        semantic_overlap: bool = True
+        use_token_counting: bool = True
     ):
         """
-        Initialize ChunkingService with configuration.
-        
+        Initialize ChunkingService with token-based counting.
+
         Args:
-            chunk_size: Target chunk size in words
-            chunk_overlap: Overlap size in words for context preservation
-            min_chunk_size: Minimum acceptable chunk size in words
-            respect_paragraphs: Whether to respect paragraph boundaries
-            respect_headings: Whether to detect and preserve heading context
-            semantic_overlap: Whether to use semantic (paragraph-based) overlap
+            chunk_size: Maximum tokens per chunk (default from settings)
+            chunk_overlap: Number of tokens to overlap between chunks
+            min_chunk_size: Minimum characters for a valid chunk
+            use_token_counting: If True, use tokenizer for accurate counting
         """
         settings = get_settings()
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
         self.min_chunk_size = min_chunk_size
-        self.respect_paragraphs = respect_paragraphs
-        self.respect_headings = respect_headings
-        self.semantic_overlap = semantic_overlap
-        
-        # Compile regex patterns once for performance
-        self._sentence_pattern = re.compile(r'(?<=[.!?])\s+(?=[A-Z])')
-        self._paragraph_pattern = re.compile(r'\n\s*\n+')  # Double newlines = paragraph break
-        self._heading_pattern = re.compile(
-            r'^\s*(#{1,6}\s+.+|[A-Z][^\n]{0,100}:?\s*)$',
-            re.MULTILINE
-        )
-        
+        self.use_token_counting = use_token_counting
+
+        # Initialize tokenizer for accurate token counting
+        self._tokenizer = None
+        if use_token_counting:
+            self._initialize_tokenizer()
+
+        count_method = "token-based" if self._tokenizer else "word-based (estimated)"
         logger.info(
-            f"ChunkingService initialized (size={self.chunk_size}, "
-            f"overlap={self.chunk_overlap}, paragraphs={respect_paragraphs}, "
-            f"headings={respect_headings})"
+            f"ChunkingService initialized ({count_method}, size={self.chunk_size}, "
+            f"overlap={self.chunk_overlap})"
         )
-    
-    def chunk_text(self, text: str, preprocess: bool = True) -> List[str]:
+
+    def _initialize_tokenizer(self) -> None:
+        """
+        Initialize tokenizer from the embedding model.
+        Falls back gracefully if tokenizer cannot be loaded.
+        """
+        try:
+            from sentence_transformers import SentenceTransformer
+            from config import get_model_config
+
+            model_config = get_model_config()
+            model_name = model_config.embedding_model_name
+
+            # Load tokenizer (lightweight, doesn't load full model)
+            logger.debug(f"Loading tokenizer for: {model_name}")
+            model = SentenceTransformer(model_name)
+            self._tokenizer = model.tokenizer
+
+            logger.debug("✓ Tokenizer loaded successfully")
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to load tokenizer: {e}. "
+                f"Falling back to word-based estimation."
+            )
+            self._tokenizer = None
+
+    def _count_tokens(self, text: str) -> int:
+        """
+        Count tokens in text using model tokenizer or estimate from words.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Number of tokens (actual or estimated)
+        """
+        if not text:
+            return 0
+
+        if self._tokenizer is not None:
+            try:
+                # Use actual tokenizer
+                tokens = self._tokenizer.encode(text, add_special_tokens=False)
+                return len(tokens)
+            except Exception as e:
+                logger.warning(f"Tokenizer failed, using estimation: {e}")
+
+        # Fallback: estimate tokens from words
+        # Research shows: 1 word ≈ 1.3 tokens for English text
+        return int(len(text.split()) * 1.3)
+
+    def _word_count(self, text: str) -> int:
+        """
+        Legacy word count method. Prefer _count_tokens for accuracy.
+        Kept for backward compatibility.
+        """
+        return len(text.split())
+
+    def preprocess_file_content(
+        self,
+        content: str,
+        file_type: Optional[str] = None,
+        remove_extra_whitespace: bool = True,
+        normalize_unicode: bool = True,
+        remove_control_chars: bool = True
+    ) -> str:
+        """
+        Preprocess file content before chunking.
+        Handles various file formats and cleaning operations.
+
+        Args:
+            content: Raw file content
+            file_type: MIME type or file extension (e.g., 'pdf', 'text/plain')
+            remove_extra_whitespace: Remove redundant whitespace
+            normalize_unicode: Normalize unicode characters
+            remove_control_chars: Remove control characters
+
+        Returns:
+            Cleaned content ready for chunking
+        """
+        if not content:
+            return ""
+
+        logger.debug(f"Preprocessing content (type: {file_type}, {len(content)} chars)")
+
+        # Use TextProcessor for basic cleaning
+        cleaned = TextProcessor.clean_text(
+            content,
+            remove_extra_whitespace=remove_extra_whitespace,
+            normalize_unicode=normalize_unicode
+        )
+
+        # Remove control characters if requested
+        if remove_control_chars:
+            # Remove control characters except newlines and tabs
+            cleaned = ''.join(
+                char for char in cleaned
+                if char == '\n' or char == '\t' or not (0 <= ord(char) < 32 or ord(char) == 127)
+            )
+
+        # File-type specific preprocessing
+        if file_type:
+            file_type = file_type.lower()
+
+            # PDF-specific cleanup
+            if 'pdf' in file_type:
+                # PDFs often have broken hyphenation
+                cleaned = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', cleaned)
+                # Remove page headers/footers patterns (common in PDFs)
+                cleaned = re.sub(r'\n\s*\d+\s*\n', '\n', cleaned)
+
+            # HTML/Web content cleanup
+            elif 'html' in file_type or 'xml' in file_type:
+                # Remove HTML entities
+                cleaned = re.sub(r'&[a-zA-Z]+;', ' ', cleaned)
+                # Remove extra newlines from HTML parsing
+                cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+            # Code files - preserve structure
+            elif any(ext in file_type for ext in ['python', 'java', 'javascript', 'cpp', 'c++']):
+                # Don't remove extra whitespace for code
+                pass
+
+        logger.debug(f"After preprocessing: {len(cleaned)} chars")
+        return cleaned
+
+    def chunk_text(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False
+    ) -> List[str] | List[dict]:
+        """
+        Split text into chunks using token-aware sentence splitting.
+        Synchronous version - for backward compatibility.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, return list of dicts with chunk + metadata
+
+        Returns:
+            List of text chunks, or list of dicts if return_metadata=True
+        """
         if not text or not text.strip():
+            logger.warning("Empty text provided for chunking")
             return []
-        
+
+        token_count = self._count_tokens(text)
+        logger.debug(f"Chunking text: {len(text)} chars, {token_count} tokens")
+
+        # Preprocess if requested
         if preprocess:
             text = TextProcessor.clean_text(text)
-            if not text.strip():
-                return []
-        
-        word_count = self._word_count(text)
-        if word_count < 20:
+            token_count = self._count_tokens(text)
+            logger.debug(f"After preprocessing: {len(text)} chars, {token_count} tokens")
+
+        # For very short texts, just return as single chunk
+        if token_count < 20:
+            logger.debug("Short text, returning as single chunk")
             return [text]
-        
-        # Try paragraph chunking first if text has paragraphs
-        if self.respect_paragraphs and '\n\n' in text:
-            chunks = self._chunk_by_paragraphs(text)
-            if chunks:
-                return self._refine_chunks(chunks)
-        
-        # Fall back to sentence chunking
+
+        # Split into sentences
         sentences = self._split_sentences(text)
+
         if not sentences:
+            logger.warning("No sentences found after splitting")
             return []
-        
+
+        logger.debug(f"Split into {len(sentences)} sentences")
+
+        # Build chunks from sentences
         chunks = self._build_chunks_from_sentences(sentences)
+
         if not chunks:
+            logger.warning("No chunks created from sentences")
             return []
-        
-        return self._refine_chunks(chunks)
-    
-    def _split_sentences(self, text: str) -> List[str]:
-        
-        patterns = [
-            r'(?<=[.!?])\s+(?=[A-Z])',  # Period/!/? followed by capital
-            r'(?<=\n)\s*(?=\w)',         # Newline followed by word
-        ]
-        
-        sentences = re.split(patterns[0], text)
-        
-        final_sentences = []
-        for sent in sentences:
-            if self._word_count(sent) > self.chunk_size * 1.5:
-                # Split long sentences on newlines
-                sub_sents = [s.strip() for s in sent.split('\n') if s.strip()]
-                final_sentences.extend(sub_sents)
+
+        # Filter out very small chunks (token-based)
+        min_tokens = max(5, self.min_chunk_size // 10)
+        filtered_chunks = [c for c in chunks if self._count_tokens(c) >= min_tokens]
+
+        # If all chunks were filtered out, return the original chunks
+        if not filtered_chunks:
+            logger.warning(
+                f"All chunks filtered out (min_tokens={min_tokens}), "
+                f"returning original chunks"
+            )
+            filtered_chunks = chunks
+
+        logger.debug(
+            f"Created {len(filtered_chunks)} chunks from {len(sentences)} sentences"
+        )
+
+        # Return with metadata if requested
+        if return_metadata:
+            return self._add_chunk_metadata(filtered_chunks, text)
+
+        return filtered_chunks
+
+    async def chunk_text_async(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False
+    ) -> List[str] | List[dict]:
+        """
+        Async version of chunk_text for better integration with async systems.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, return list of dicts with chunk + metadata
+
+        Returns:
+            List of text chunks, or list of dicts if return_metadata=True
+        """
+        # Run the synchronous chunking in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.chunk_text,
+            text,
+            preprocess,
+            return_metadata
+        )
+
+    async def chunk_text_stream(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False,
+        batch_size: int = 10
+    ) -> AsyncGenerator[Dict | str, None]:
+        """
+        Stream chunks for large documents to reduce memory usage.
+        Yields chunks in batches for efficient processing.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, yield dicts with chunk + metadata
+            batch_size: Number of chunks to process before yielding
+
+        Yields:
+            Individual chunks (str or dict) or batches of chunks
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided for chunking")
+            return
+
+        token_count = self._count_tokens(text)
+        logger.debug(f"Streaming chunks for text: {len(text)} chars, {token_count} tokens")
+
+        # Preprocess if requested
+        if preprocess:
+            text = TextProcessor.clean_text(text)
+            token_count = self._count_tokens(text)
+            logger.debug(f"After preprocessing: {len(text)} chars, {token_count} tokens")
+
+        # For very short texts, just yield as single chunk
+        if token_count < 20:
+            logger.debug("Short text, yielding as single chunk")
+            if return_metadata:
+                yield self._add_chunk_metadata([text], text)[0]
             else:
-                final_sentences.append(sent.strip())
-        
-        return [s for s in final_sentences if s]
-    
-    def _build_chunks_from_sentences(self, sentences: List[str]) -> List[str]:
-       
-        chunks = []
+                yield text
+            return
+
+        # Split into sentences
+        sentences = self._split_sentences(text)
+
+        if not sentences:
+            logger.warning("No sentences found after splitting")
+            return
+
+        logger.debug(f"Split into {len(sentences)} sentences")
+
+        # Build and yield chunks incrementally
         current_chunk = []
-        current_word_count = 0
-        
-        for i, sentence in enumerate(sentences):
-            sentence_words = self._word_count(sentence)
-            
-            if current_word_count + sentence_words > self.chunk_size and current_chunk:
-                # Join current chunk
-                chunks.append(' '.join(current_chunk))
-                
+        current_token_count = 0
+        chunk_index = 0
+        total_chunks_estimate = self.estimate_chunks(text)
+        min_tokens = max(5, self.min_chunk_size // 10)
+
+        for sentence in sentences:
+            sentence_tokens = self._count_tokens(sentence)
+
+            # Check if adding this sentence would exceed chunk size
+            if current_token_count + sentence_tokens > self.chunk_size and current_chunk:
+                # Yield current chunk
+                chunk_text = ' '.join(current_chunk)
+
+                # Only yield if chunk meets minimum size
+                if self._count_tokens(chunk_text) >= min_tokens:
+                    if return_metadata:
+                        chunk_meta = {
+                            'content': chunk_text,
+                            'chunk_index': chunk_index,
+                            'total_chunks': total_chunks_estimate,
+                            'token_count': float(self._count_tokens(chunk_text)),
+                            'word_count': float(self._word_count(chunk_text)),
+                            'char_count': len(chunk_text),
+                            'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
+                            'relative_position': chunk_index / max(total_chunks_estimate - 1, 1),
+                        }
+                        yield chunk_meta
+                    else:
+                        yield chunk_text
+
+                    chunk_index += 1
+
+                    # Allow async context switching every batch_size chunks
+                    if chunk_index % batch_size == 0:
+                        await asyncio.sleep(0)
+
+                # Get overlap sentences for continuity
                 overlap_sentences = self._get_overlap_sentences(
                     current_chunk,
                     self.chunk_overlap
                 )
                 current_chunk = overlap_sentences
-                current_word_count = sum(self._word_count(s) for s in current_chunk)
-            
+                current_token_count = sum(
+                    self._count_tokens(s) for s in current_chunk
+                )
+
             current_chunk.append(sentence)
-            current_word_count += sentence_words
-        
+            current_token_count += sentence_tokens
+
+        # Don't forget the last chunk
+        if current_chunk:
+            chunk_text = ' '.join(current_chunk)
+            if self._count_tokens(chunk_text) >= min_tokens:
+                if return_metadata:
+                    chunk_meta = {
+                        'content': chunk_text,
+                        'chunk_index': chunk_index,
+                        'total_chunks': chunk_index + 1,  # Actual total
+                        'token_count': float(self._count_tokens(chunk_text)),
+                        'word_count': float(self._word_count(chunk_text)),
+                        'char_count': len(chunk_text),
+                        'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
+                        'relative_position': 1.0,
+                    }
+                    yield chunk_meta
+                else:
+                    yield chunk_text
+
+        logger.debug(f"Finished streaming {chunk_index + 1} chunks")
+
+    def _add_chunk_metadata(
+        self,
+        chunks: List[str],
+        original_text: str
+    ) -> List[dict]:
+        """
+        Add metadata to chunks including position and structural info.
+
+        Args:
+            chunks: List of chunk texts
+            original_text: Original full text
+
+        Returns:
+            List of dicts with chunk content and metadata
+        """
+        chunks_with_metadata = []
+        char_position = 0
+
+        for idx, chunk in enumerate(chunks):
+            # Find approximate position in original text
+            chunk_start = original_text.find(chunk[:50]) if len(chunk) >= 50 else original_text.find(chunk)
+            if chunk_start == -1:
+                chunk_start = char_position
+
+            metadata = {
+                'content': chunk,
+                'chunk_index': idx,
+                'total_chunks': len(chunks),
+                'token_count': float(self._count_tokens(chunk)),  # Convert to float
+                'word_count': float(self._word_count(chunk)),  # Convert to float
+                'char_count': len(chunk),
+                'char_position': chunk_start,
+                'relative_position': idx / max(len(chunks) - 1, 1),  # 0.0 to 1.0
+            }
+
+            chunks_with_metadata.append(metadata)
+            char_position = chunk_start + len(chunk)
+
+        return chunks_with_metadata
+    
+    def _split_sentences(self, text: str) -> List[str]:
+        """
+        Split text into sentences using improved regex patterns.
+        Handles abbreviations, decimals, ellipsis, and quoted sentences.
+        Falls back to paragraph splitting for very long sentences.
+
+        Args:
+            text: Input text
+
+        Returns:
+            List of sentences
+        """
+        # Try NLTK if available for best accuracy
+        try:
+            import nltk
+            try:
+                sentences = nltk.sent_tokenize(text)
+                logger.debug("Using NLTK sentence tokenizer")
+            except LookupError:
+                # NLTK data not downloaded, download punkt
+                logger.debug("Downloading NLTK punkt tokenizer...")
+                nltk.download('punkt', quiet=True)
+                nltk.download('punkt_tab', quiet=True)
+                sentences = nltk.sent_tokenize(text)
+        except ImportError:
+            # NLTK not available, use improved regex
+            logger.debug("NLTK not available, using regex-based sentence splitting")
+            sentences = self._regex_sentence_split(text)
+
+        # Handle overly long sentences by splitting on paragraph boundaries
+        final_sentences = []
+        for sent in sentences:
+            sent_tokens = self._count_tokens(sent)
+            # If sentence is too long (exceeds 1.5x chunk size), split on newlines
+            if sent_tokens > self.chunk_size * 1.5:
+                # Split on double newlines (paragraphs) or single newlines
+                if '\n\n' in sent:
+                    sub_sents = [s.strip() for s in sent.split('\n\n') if s.strip()]
+                else:
+                    sub_sents = [s.strip() for s in sent.split('\n') if s.strip()]
+                final_sentences.extend(sub_sents)
+            else:
+                final_sentences.append(sent.strip())
+
+        return [s for s in final_sentences if s]
+
+    def _regex_sentence_split(self, text: str) -> List[str]:
+        """
+        Improved regex-based sentence splitting.
+        Handles common edge cases like abbreviations and decimals.
+
+        Args:
+            text: Input text
+
+        Returns:
+            List of sentences
+        """
+        # Common abbreviations that shouldn't trigger sentence breaks
+        abbreviations = r'(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|Inc|Ltd|Co|Corp)'
+
+        # Split on sentence boundaries while avoiding common false positives
+        # This pattern looks for:
+        # 1. Sentence-ending punctuation (.!?)
+        # 2. Optional closing quotes/brackets
+        # 3. Whitespace
+        # 4. Uppercase letter or digit (start of next sentence)
+        # But NOT after abbreviations or decimal points
+
+        # Replace abbreviations temporarily to avoid splitting
+        abbrev_pattern = f'({abbreviations})\\.\\s+'
+        protected_text = re.sub(abbrev_pattern, r'\1<ABBREV> ', text)
+
+        # Protect decimal numbers (e.g., 3.14)
+        protected_text = re.sub(r'(\d)\.(\d)', r'\1<DECIMAL>\2', protected_text)
+
+        # Now split on sentence boundaries
+        pattern = r'(?<=[.!?])(?<![.!?][.!?])[\s]+(?=[A-Z\d])'
+        sentences = re.split(pattern, protected_text)
+
+        # Restore protected patterns
+        sentences = [
+            s.replace('<ABBREV>', '.').replace('<DECIMAL>', '.')
+            for s in sentences
+        ]
+
+        return [s.strip() for s in sentences if s.strip()]
+    
+    def _build_chunks_from_sentences(self, sentences: List[str]) -> List[str]:
+        """
+        Build chunks from sentences respecting token limits.
+
+        Args:
+            sentences: List of sentences
+
+        Returns:
+            List of chunks
+        """
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+
+        for sentence in sentences:
+            sentence_tokens = self._count_tokens(sentence)
+
+            # Check if adding this sentence would exceed chunk size
+            if current_token_count + sentence_tokens > self.chunk_size and current_chunk:
+                # Save current chunk
+                chunks.append(' '.join(current_chunk))
+
+                # Get overlap sentences for continuity
+                overlap_sentences = self._get_overlap_sentences(
+                    current_chunk,
+                    self.chunk_overlap
+                )
+                current_chunk = overlap_sentences
+                current_token_count = sum(
+                    self._count_tokens(s) for s in current_chunk
+                )
+
+            current_chunk.append(sentence)
+            current_token_count += sentence_tokens
+
+        # Don't forget the last chunk
         if current_chunk:
             chunks.append(' '.join(current_chunk))
-        
+
         return chunks
     
     def _get_overlap_sentences(
         self,
         sentences: List[str],
-        overlap_words: int
+        overlap_tokens: int
     ) -> List[str]:
-       
-        if not sentences or overlap_words == 0:
+        """
+        Get sentences from end of chunk for overlap with next chunk.
+
+        Args:
+            sentences: List of sentences from previous chunk
+            overlap_tokens: Number of tokens to overlap
+
+        Returns:
+            List of sentences for overlap
+        """
+        if not sentences or overlap_tokens == 0:
             return []
-        
+
         overlap_sentences = []
-        word_count = 0
-        
-        # Iterate from end
+        token_count = 0
+
+        # Iterate from end to get last N tokens
         for sentence in reversed(sentences):
-            sent_words = self._word_count(sentence)
-            if word_count + sent_words <= overlap_words:
+            sent_tokens = self._count_tokens(sentence)
+            if token_count + sent_tokens <= overlap_tokens:
                 overlap_sentences.insert(0, sentence)
-                word_count += sent_words
+                token_count += sent_tokens
             else:
                 break
-        
+
         return overlap_sentences
     
     def _word_count(self, text: str) -> int:
+        """
+        Legacy word count method. Prefer _count_tokens for accuracy.
+        Kept for backward compatibility.
+        """
         return len(text.split())
-    
-    def _chunk_by_paragraphs(self, text: str) -> List[str]:
-        """Chunk text by paragraphs instead of just sentences."""
-        paragraphs = self._paragraph_pattern.split(text)
-        paragraphs = [p.strip() for p in paragraphs if p.strip()]
-        
-        if not paragraphs:
-            return []
-        
-        chunks = []
-        current_chunk = []
-        current_word_count = 0
-        
-        for para in paragraphs:
-            para_words = self._word_count(para)
-            
-            # Handle really long paragraphs
-            if para_words > self.chunk_size:
-                if current_chunk:
-                    chunks.append('\n\n'.join(current_chunk))
-                    current_chunk = []
-                    current_word_count = 0
-                
-                # Split the long paragraph
-                sub_chunks = self._split_large_paragraph(para)
-                chunks.extend(sub_chunks)
-                continue
-            
-            # Check if we'd exceed chunk size
-            if current_word_count + para_words > self.chunk_size and current_chunk:
-                chunks.append('\n\n'.join(current_chunk))
-                
-                # Keep some context from previous chunk
-                if self.chunk_overlap > 0:
-                    overlap_paras = self._get_overlap_paragraphs(current_chunk, self.chunk_overlap)
-                    current_chunk = overlap_paras
-                    current_word_count = sum(self._word_count(p) for p in current_chunk)
-                else:
-                    current_chunk = []
-                    current_word_count = 0
-            
-            current_chunk.append(para)
-            current_word_count += para_words
-        
-        if current_chunk:
-            chunks.append('\n\n'.join(current_chunk))
-        
-        return chunks
-    
-    def _get_overlap_paragraphs(self, paragraphs: List[str], overlap_words: int) -> List[str]:
-        """Get last paragraphs that fit in overlap size."""
-        if not paragraphs or overlap_words == 0:
-            return []
-        
-        overlap_paras = []
-        word_count = 0
-        
-        for para in reversed(paragraphs):
-            para_words = self._word_count(para)
-            if word_count + para_words <= overlap_words:
-                overlap_paras.insert(0, para)
-                word_count += para_words
-            else:
-                break
-        
-        return overlap_paras
-    
-    def _split_large_paragraph(self, paragraph: str) -> List[str]:
-        """Split a paragraph that's too big into sentences."""
-        sentences = self._split_sentences(paragraph)
-        
-        chunks = []
-        current_chunk = []
-        current_word_count = 0
-        
-        for sentence in sentences:
-            sent_words = self._word_count(sentence)
-            
-            if current_word_count + sent_words > self.chunk_size and current_chunk:
-                chunks.append(' '.join(current_chunk))
-                # Keep last sentence or two for context
-                overlap = current_chunk[-2:] if len(current_chunk) >= 2 else current_chunk[-1:]
-                current_chunk = overlap
-                current_word_count = sum(self._word_count(s) for s in current_chunk)
-            
-            current_chunk.append(sentence)
-            current_word_count += sent_words
-        
-        if current_chunk:
-            chunks.append(' '.join(current_chunk))
-        
-        return chunks
-    
-    def _refine_chunks(self, chunks: List[str]) -> List[str]:
-        """Merge tiny chunks and filter out noise."""
-        if not chunks:
-            return []
-        
-        refined = []
-        min_words = max(5, self.min_chunk_size // 3)
-        
-        i = 0
-        while i < len(chunks):
-            chunk = chunks[i]
-            chunk_words = self._word_count(chunk)
-            
-            # Try merging small chunks with next one
-            if chunk_words < min_words and i < len(chunks) - 1:
-                next_chunk = chunks[i + 1]
-                combined = f"{chunk}\n\n{next_chunk}"
-                combined_words = self._word_count(combined)
-                
-                # Merge if it makes sense
-                if combined_words <= self.chunk_size * 1.2:
-                    refined.append(combined)
-                    i += 2
-                    continue
-            
-            refined.append(chunk)
-            i += 1
-        
-        # Keep chunks that meet min size
-        filtered = [c for c in refined if self._word_count(c) >= min_words]
-        return filtered if filtered else refined
-    
-    def get_chunk_metadata(self, chunk: str) -> dict:
-        has_paras = '\n\n' in chunk
-        para_count = len(self._paragraph_pattern.split(chunk)) if has_paras else 1
-        
-        return {
+
+    def get_chunk_metadata(
+        self,
+        chunk: str,
+        chunk_index: Optional[int] = None,
+        total_chunks: Optional[int] = None,
+        char_position: Optional[int] = None
+    ) -> dict:
+        """
+        Get metadata about a chunk including token and word counts.
+
+        Args:
+            chunk: Text chunk
+            chunk_index: Position in chunk sequence
+            total_chunks: Total number of chunks in document
+            char_position: Character position in original document
+
+        Returns:
+            Dictionary with metadata
+        """
+        metadata = {
+            'token_count': self._count_tokens(chunk),
             'word_count': self._word_count(chunk),
-            'char_count': len(chunk),
-            'has_paragraphs': has_paras,
-            'paragraph_count': para_count
+            'char_count': len(chunk)
         }
-    
+
+        # Add optional positional metadata
+        if chunk_index is not None:
+            metadata['chunk_index'] = chunk_index
+        if total_chunks is not None:
+            metadata['total_chunks'] = total_chunks
+            if chunk_index is not None:
+                metadata['relative_position'] = chunk_index / max(total_chunks - 1, 1)
+        if char_position is not None:
+            metadata['char_position'] = char_position
+
+        return metadata
+
     def estimate_chunks(self, text: str) -> int:
-        
-        word_count = self._word_count(text)
-        if word_count == 0:
+        """
+        Estimate number of chunks for given text.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Estimated number of chunks
+        """
+        token_count = self._count_tokens(text)
+        if token_count == 0:
             return 0
-        
+
         effective_chunk_size = self.chunk_size - self.chunk_overlap
-        return max(1, (word_count + effective_chunk_size - 1) // effective_chunk_size)
+        return max(1, (token_count + effective_chunk_size - 1) // effective_chunk_size)
 
 _chunking_service = None
 

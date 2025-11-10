@@ -28,9 +28,11 @@ class Settings:
         self.embedding_dimension = int(os.getenv('EMBEDDING_DIMENSION', '1024'))
         self.rag_embedding_model = os.getenv('RAG_EMBEDDING_MODEL', 'all-mpnet-base-v2')
         
-        # Chunking Configuration
+        # Chunking Configuration (token-based)
+        # chunk_size: Maximum tokens per chunk (aligns with model's 512-token limit)
+        # chunk_overlap: 15% overlap recommended by industry best practices (2025)
         self.chunk_size = int(os.getenv('CHUNK_SIZE', '512'))
-        self.chunk_overlap = int(os.getenv('CHUNK_OVERLAP', '50'))
+        self.chunk_overlap = int(os.getenv('CHUNK_OVERLAP', '77'))  # 15% of chunk_size
         
         # Categorization Configuration
         self.similarity_threshold = float(os.getenv('SIMILARITY_THRESHOLD', '0.45'))  # Lowered for better semantic matching
