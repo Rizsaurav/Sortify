@@ -28,17 +28,20 @@ class TestChunkingService(unittest.TestCase):
         """Set up test fixtures before each test method."""
         self.mock_settings = Mock()
         self.mock_settings.chunk_size = 512
-        self.mock_settings.chunk_overlap = 50
+        self.mock_settings.chunk_overlap = 77  # Updated to 15% overlap
 
     @patch('core.chunking_service.get_settings')
-    def test_initialization_default_config(self, mock_get_settings):
+    @patch('core.chunking_service.get_model_config')
+    def test_initialization_default_config(self, mock_model_config, mock_get_settings):
         """Test ChunkingService initializes with default configuration."""
         mock_get_settings.return_value = self.mock_settings
+        # Mock model config to prevent tokenizer loading
+        mock_model_config.return_value.embedding_model_name = 'test-model'
 
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
 
         self.assertEqual(service.chunk_size, 512)
-        self.assertEqual(service.chunk_overlap, 50)
+        self.assertEqual(service.chunk_overlap, 77)
         self.assertEqual(service.min_chunk_size, 50)
 
     @patch('core.chunking_service.get_settings')
@@ -46,7 +49,12 @@ class TestChunkingService(unittest.TestCase):
         """Test ChunkingService initializes with custom parameters."""
         mock_get_settings.return_value = self.mock_settings
 
-        service = ChunkingService(chunk_size=256, chunk_overlap=25, min_chunk_size=30)
+        service = ChunkingService(
+            chunk_size=256,
+            chunk_overlap=25,
+            min_chunk_size=30,
+            use_token_counting=False
+        )
 
         self.assertEqual(service.chunk_size, 256)
         self.assertEqual(service.chunk_overlap, 25)
@@ -57,7 +65,7 @@ class TestChunkingService(unittest.TestCase):
     def test_chunk_empty_text(self, mock_clean, mock_get_settings):
         """Test chunking empty text returns empty list."""
         mock_get_settings.return_value = self.mock_settings
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
 
         result = service.chunk_text("")
         self.assertEqual(result, [])
@@ -68,11 +76,11 @@ class TestChunkingService(unittest.TestCase):
     @patch('core.chunking_service.get_settings')
     @patch('core.chunking_service.TextProcessor.clean_text')
     def test_chunk_very_short_text(self, mock_clean, mock_get_settings):
-        """Test chunking very short text (< 20 words) returns single chunk."""
+        """Test chunking very short text (< 20 tokens) returns single chunk."""
         mock_get_settings.return_value = self.mock_settings
         mock_clean.side_effect = lambda x: x  # Return input unchanged
 
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
         short_text = "This is a short test."
 
         result = service.chunk_text(short_text)
@@ -87,7 +95,7 @@ class TestChunkingService(unittest.TestCase):
         mock_get_settings.return_value = self.mock_settings
         mock_clean.return_value = "Cleaned text here"
 
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
         text = "Dirty text   with   extra spaces"
 
         result = service.chunk_text(text, preprocess=True)
@@ -100,7 +108,7 @@ class TestChunkingService(unittest.TestCase):
         """Test chunking text with preprocessing disabled."""
         mock_get_settings.return_value = self.mock_settings
 
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
         text = "Text without preprocessing"
 
         result = service.chunk_text(text, preprocess=False)
@@ -399,13 +407,112 @@ class TestChunkingService(unittest.TestCase):
     def test_build_chunks_single_sentence(self, mock_get_settings):
         """Test building chunks from single sentence."""
         mock_get_settings.return_value = self.mock_settings
-        service = ChunkingService()
+        service = ChunkingService(use_token_counting=False)
 
         sentences = ["This is a single sentence."]
         chunks = service._build_chunks_from_sentences(sentences)
 
         self.assertEqual(len(chunks), 1)
         self.assertEqual(chunks[0], sentences[0])
+
+    @patch('core.chunking_service.get_settings')
+    def test_token_counting_without_tokenizer(self, mock_get_settings):
+        """Test token counting falls back to word-based estimation."""
+        mock_get_settings.return_value = self.mock_settings
+        service = ChunkingService(use_token_counting=False)
+
+        text = "This is a test sentence with ten words here."
+        token_count = service._count_tokens(text)
+
+        # With fallback: 10 words * 1.3 = 13 tokens (estimated)
+        self.assertEqual(token_count, 13)
+
+    @patch('core.chunking_service.get_settings')
+    @patch('core.chunking_service.TextProcessor.clean_text')
+    def test_chunk_text_with_metadata(self, mock_clean, mock_get_settings):
+        """Test chunking with metadata returns enriched information."""
+        mock_get_settings.return_value = self.mock_settings
+        mock_clean.side_effect = lambda x: x
+
+        service = ChunkingService(use_token_counting=False)
+        text = "First sentence here. Second sentence here. Third sentence here. " * 10
+
+        result = service.chunk_text(text, return_metadata=True)
+
+        # Should return list of dicts
+        self.assertIsInstance(result, list)
+        self.assertGreater(len(result), 0)
+        self.assertIsInstance(result[0], dict)
+
+        # Check metadata fields
+        first_chunk = result[0]
+        self.assertIn('content', first_chunk)
+        self.assertIn('chunk_index', first_chunk)
+        self.assertIn('total_chunks', first_chunk)
+        self.assertIn('token_count', first_chunk)
+        self.assertIn('word_count', first_chunk)
+        self.assertIn('char_count', first_chunk)
+        self.assertIn('char_position', first_chunk)
+        self.assertIn('relative_position', first_chunk)
+
+        # Check values
+        self.assertEqual(first_chunk['chunk_index'], 0)
+        self.assertGreaterEqual(first_chunk['relative_position'], 0.0)
+        self.assertLessEqual(first_chunk['relative_position'], 1.0)
+
+    @patch('core.chunking_service.get_settings')
+    def test_get_chunk_metadata_with_position(self, mock_get_settings):
+        """Test get_chunk_metadata includes positional information."""
+        mock_get_settings.return_value = self.mock_settings
+        service = ChunkingService(use_token_counting=False)
+
+        chunk = "This is a test chunk."
+        metadata = service.get_chunk_metadata(
+            chunk,
+            chunk_index=2,
+            total_chunks=10,
+            char_position=1000
+        )
+
+        self.assertIn('token_count', metadata)
+        self.assertIn('word_count', metadata)
+        self.assertIn('char_count', metadata)
+        self.assertIn('chunk_index', metadata)
+        self.assertIn('total_chunks', metadata)
+        self.assertIn('relative_position', metadata)
+        self.assertIn('char_position', metadata)
+
+        self.assertEqual(metadata['chunk_index'], 2)
+        self.assertEqual(metadata['total_chunks'], 10)
+        self.assertEqual(metadata['char_position'], 1000)
+        # relative_position = 2 / (10-1) = 0.222...
+        self.assertAlmostEqual(metadata['relative_position'], 2/9, places=2)
+
+    @patch('core.chunking_service.get_settings')
+    def test_regex_sentence_split_handles_abbreviations(self, mock_get_settings):
+        """Test regex sentence splitter handles abbreviations correctly."""
+        mock_get_settings.return_value = self.mock_settings
+        service = ChunkingService(use_token_counting=False)
+
+        text = "Dr. Smith went to the store. He bought milk."
+        sentences = service._regex_sentence_split(text)
+
+        # Should split into 2 sentences, not 3 (Dr. should not cause split)
+        self.assertEqual(len(sentences), 2)
+        self.assertIn("Dr. Smith", sentences[0])
+
+    @patch('core.chunking_service.get_settings')
+    def test_regex_sentence_split_handles_decimals(self, mock_get_settings):
+        """Test regex sentence splitter handles decimal numbers correctly."""
+        mock_get_settings.return_value = self.mock_settings
+        service = ChunkingService(use_token_counting=False)
+
+        text = "The value is 3.14. This is another sentence."
+        sentences = service._regex_sentence_split(text)
+
+        # Should split into 2 sentences, not break on decimal point
+        self.assertEqual(len(sentences), 2)
+        self.assertIn("3.14", sentences[0])
 
 
 if __name__ == '__main__':
