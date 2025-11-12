@@ -52,17 +52,72 @@ export default function ChatbotPopup() {
     setInputMessage('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    // --- NEW: Call Gemini API for a dynamic response ---
+    try {
+      // This is the system prompt that guides the AI's persona and knowledge
+      const systemPrompt = `You are 'Sortify Assistant,' a helpful and friendly chatbot for a student file organization app called 'Sortify.' 
+      Your role is to help students with their files, studies, and using the app.
+      You have knowledge of the app's features:
+      - Uploading files: Users can click 'Upload Files' or drag and drop.
+      - Searching: Users can search by filename, category, or content. There is also an 'AI Search' feature.
+      - Organization: The app automatically organizes files into categories like Assignments, Lectures, Research, Math, and Science.
+      - Storage: Users have 15GB total storage, which they can check in the sidebar.
+      
+      Keep your answers concise, friendly, and focused on helping the student.
+      Do not make up features that don't exist.`;
+
+      const apiKey = ""; // API key is handled by the environment
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: userMessage.text }] }],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      const botText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      let botResponseText = "Sorry, I couldn't generate a response. Please try again.";
+      if (botText) {
+        botResponseText = botText;
+      }
+
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: generateBotResponse(inputMessage),
+        text: botResponseText,
         sender: 'bot',
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, botResponse]);
+
+    } catch (error) {
+      console.error("Error fetching bot response:", error);
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I'm having trouble connecting right now. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+      // Ensure focus is returned to input after sending
+      inputRef.current?.focus();
+    }
+    // ---------------------------------------------------
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
