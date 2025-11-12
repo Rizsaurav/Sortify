@@ -66,7 +66,7 @@ export default function ChatbotPopup() {
       Keep your answers concise, friendly, and focused on helping the student.
       Do not make up features that don't exist.`;
 
-      const apiKey = ""; // API key is handled by the environment
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
       const payload = {
