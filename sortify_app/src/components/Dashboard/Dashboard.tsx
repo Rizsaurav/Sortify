@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false); //Track processing state
 
   // Prevent browser's default drag-and-drop file upload behavior
   useEffect(() => {
@@ -45,7 +46,6 @@ export default function Dashboard() {
       e.stopPropagation();
     };
 
-    // Disable default drag behaviors on the entire window
     window.addEventListener('dragover', preventDefault);
     window.addEventListener('drop', preventDefault);
 
@@ -104,70 +104,97 @@ export default function Dashboard() {
     fetchCategories
   } = useCategoryManagement(userProfile?.id || '');
 
-  // Use demo files if no real files
-  const displayFiles = filteredFiles.length > 0 ? filteredFiles : DEMO_FILES;
+  // display files logic
+  const displayFiles = uploadedFiles.length === 0 ? DEMO_FILES : filteredFiles;
+  const hasRealFiles = uploadedFiles.length > 0;
 
-  // Wrapper for category change with refresh
+  // Debug effect to track state changes
+  useEffect(() => {
+    console.log('📊 Dashboard State:', {
+      totalUploaded: uploadedFiles.length,
+      filtered: filteredFiles.length,
+      displaying: displayFiles.length,
+      activeCategory: selectedCategory,
+      hasRealFiles,
+      isProcessing
+    });
+  }, [uploadedFiles.length, filteredFiles.length, displayFiles.length, selectedCategory, hasRealFiles, isProcessing]);
+
+  //Wrapper for category change with proper state management
   const handleCategoryChange = async (fileId: string, categoryId: number, categoryName: string) => {
+    if (isProcessing) {
+      console.log('⏳ Already processing, please wait...');
+      return;
+    }
+
     try {
       console.log('🎯 Changing category via edit modal:', { fileId, categoryId, categoryName });
       
-      // Check if it's a demo file
       if (fileId.startsWith('demo-')) {
-        console.warn('Cannot change category for demo files');
         addNotification('⚠️ Cannot change category for demo files', 'info');
         return;
       }
       
+      setIsProcessing(true);
+      
       await changeFileCategory(fileId, categoryId, categoryName, async () => {
-        // Refresh the files list after successful category change
+        console.log('🔄 Refreshing files after category change...');
         await fetchFiles();
       });
       
-      // Show success notification
+      // Clear the filter to show all files including the moved one
+      handleCategoryFilter('');
+      
       addNotification(`✅ File moved to ${categoryName}`, 'success');
       
     } catch (error) {
       console.error('❌ Failed to change file category:', error);
       addNotification('❌ Failed to move file. Please try again.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  // Handle drag and drop to categories
+  // FIXED: Handle drag and drop with proper state management
   const handleCategoryDrop = async (fileId: string, categoryId: number, categoryName: string) => {
+    if (isProcessing) {
+      console.log('⏳ Already processing, please wait...');
+      return;
+    }
+
     try {
-      console.log('Dropping file:', { fileId, categoryId, categoryName });
+      console.log('🎯 Dropping file:', { fileId, categoryId, categoryName });
       
-      // Check if it's a demo file
       if (fileId.startsWith('demo-')) {
-        console.warn('Cannot change category for demo files');
         addNotification('⚠️ Cannot change category for demo files', 'info');
         return;
       }
       
-      // Call changeFileCategory with success callback
+      setIsProcessing(true);
+      
       await changeFileCategory(fileId, categoryId, categoryName, async () => {
-        // Refresh the files list after successful category change
+        console.log('🔄 Refreshing files after drop...');
         await fetchFiles();
       });
       
-      // Show success notification
-      addNotification(`File moved to ${categoryName}`, 'success');
+      // FIXED: Clear filter so user can see the moved file
+      handleCategoryFilter('');
+      
+      addNotification(`✅ File moved to ${categoryName}`, 'success');
       
     } catch (error) {
-      console.error('Failed to change file category:', error);
-      addNotification('Failed to move file. Please try again.', 'error');
+      console.error('❌ Failed to change file category:', error);
+      addNotification('❌ Failed to move file. Please try again.', 'error');
+    } finally {
+      setIsProcessing(false);
     }
   };
-
-
 
   const handleDeleteFile = async (fileId: string, fileName: string, storagePath?: string) => {
     try {
       await deleteFile(fileId, fileName, storagePath);
-      // Success notification is handled by the useFileManagement hook
     } catch (error) {
-      // Error notification is handled by the useFileManagement hook
+      console.error('Delete error:', error);
     }
   };
 
@@ -177,9 +204,8 @@ export default function Dashboard() {
         await renameFile(fileId, newFileName.trim());
         setRenamingFileId(null);
         setNewFileName('');
-        // Success notification is handled by the useFileManagement hook
       } catch (error) {
-        // Error notification is handled by the useFileManagement hook
+        console.error('Rename error:', error);
       }
     }
   };
@@ -244,6 +270,16 @@ export default function Dashboard() {
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => e.preventDefault()}
           >
+            {/* FIXED: Processing Overlay */}
+            {isProcessing && (
+              <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
+                <div className="bg-card border border-border rounded-xl p-6 text-center shadow-xl">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                  <p className="text-sm text-muted-foreground">Moving file...</p>
+                </div>
+              </div>
+            )}
+
             {/* Drag and Drop Overlay */}
             {isDragging && (
               <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm flex items-center justify-center">
@@ -258,7 +294,9 @@ export default function Dashboard() {
             <div className="space-y-4">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Welcome back, {userProfile?.username || 'User'}</h1>
+                  <h1 className="text-2xl lg:text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    Welcome back, {userProfile?.username || 'User'}
+                  </h1>
                   <p className="text-muted-foreground text-sm lg:text-base mt-1">Your files are organized and ready to search</p>
                 </div>
                 <label className="w-full lg:w-auto px-6 lg:px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer">
@@ -294,6 +332,7 @@ export default function Dashboard() {
                 </button>
               </div>
 
+              {/* FIXED: Filter tags with proper template literals */}
               <div className="flex items-center gap-2 flex-wrap">
                 <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors">
                   <Filter className="h-4 w-4" />
@@ -365,7 +404,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Student Profile */}
+                {/* Analytics */}
                 <div className="bg-card rounded-xl border border-border p-4">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <BarChart3 className="w-5 h-5" />
@@ -456,7 +495,7 @@ export default function Dashboard() {
                     onDeleteFile={handleDeleteFile}
                     onFileNameChange={setNewFileName}
                     onConfirmRename={handleRenameFile}
-                        onCategoryChange={handleCategoryChange}
+                    onCategoryChange={handleCategoryChange}
                     onRefreshCategories={fetchCategories}
                   />
                 )}
@@ -472,7 +511,11 @@ export default function Dashboard() {
                   </h3>
                   <div className="space-y-2">
                     {displayFiles.slice(0, 3).map((file) => (
-                      <div key={file.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer" onClick={() => handlePreviewFile(file)}>
+                      <div 
+                        key={file.id} 
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer" 
+                        onClick={() => handlePreviewFile(file)}
+                      >
                         <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center">
                           <FileText className="w-4 h-4" />
                         </div>

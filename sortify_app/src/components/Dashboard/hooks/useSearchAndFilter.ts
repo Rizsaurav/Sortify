@@ -64,8 +64,23 @@ export const useSearchAndFilter = (files: UploadedFile[]) => {
     setFilteredFiles(filtered);
   }, [files, searchQuery, selectedCategory, activeFilter]);
 
-  const handleCategoryFilter = (category: string) => {
-    setSelectedCategory(selectedCategory === category ? null : category);
+  // Proper category filter handling
+  const handleCategoryFilter = (category: string | null) => {
+    console.log('🔧 handleCategoryFilter called with:', category);
+    
+    // If empty string or null, clear the filter
+    if (!category || category === '') {
+      console.log('Clearing category filter');
+      setSelectedCategory(null);
+    } else if (selectedCategory === category) {
+      // If clicking the same category, toggle it off
+      console.log('🔄 Toggling off category:', category);
+      setSelectedCategory(null);
+    } else {
+      // Set new category
+      console.log('📂 Setting category filter to:', category);
+      setSelectedCategory(category);
+    }
   };
 
   const clearFilters = () => {

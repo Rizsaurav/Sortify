@@ -18,6 +18,7 @@ export interface UploadedFile {
 
 // Represents a file category and its associated metadata
 export interface CategoryCount {
+  id: number;
   name: string;
   icon: any;
   count: number;

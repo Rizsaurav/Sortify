@@ -14,30 +14,40 @@ export const useFileManagement = () => {
   const [notifications, setNotifications] = useState<Array<{id: string, message: string, type: 'success' | 'error' | 'info'}>>([]);
   const [folderCounts] = useState<{[key: string]: number}>({});
 
-  // Notification functions
+  // Notification counter to ensure unique IDs
   let notificationIdCounter = 0;
   
+  /**
+   * Add a notification to the notification stack
+   * Auto-removes after 5 seconds
+   */
   const addNotification = (message: string, type: 'success' | 'error' | 'info') => {
     notificationIdCounter++;
     const id = `${Date.now()}-${notificationIdCounter}`;
     setNotifications(prev => [...prev, { id, message, type }]);
     
-    // Auto-remove after 5 seconds
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
   };
 
+  /**
+   * Manually remove a notification by ID
+   */
   const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  /**
+   * Fetch all files and categories from the backend
+   * Processes files and calculates category counts
+   */
   const fetchFiles = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Get documents via backend API to avoid RLS issues
+      // Fetch documents from backend API
       let documents: any[] = [];
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/upload/documents?user_id=${user.id}`);
@@ -52,14 +62,16 @@ export const useFileManagement = () => {
         console.error('Error fetching document metadata:', error);
       }
 
-      // Get categories via backend API to avoid RLS issues
-      let categoriesMap = new Map();
+      // Fetch categories from backend API and create ID-to-name mapping
+      let categoriesMap = new Map<number, string>();
+      let categoriesArray: any[] = [];
       try {
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/categories?user_id=${user.id}`);
         if (response.ok) {
           const data = await response.json();
           console.log('Categories fetched from backend:', data);
           if (data.categories) {
+            categoriesArray = data.categories;
             data.categories.forEach((cat: any) => {
               categoriesMap.set(cat.id, cat.label);
             });
@@ -72,6 +84,7 @@ export const useFileManagement = () => {
         console.error('Error fetching categories:', error);
       }
 
+      // Process documents and map cluster_id to category names
       const processedFiles: UploadedFile[] = documents.map((doc: any) => {
         const categoryId = doc.cluster_id;
         const categoryName = categoryId ? categoriesMap.get(categoryId) : 'General Documents';
@@ -89,7 +102,7 @@ export const useFileManagement = () => {
             ...doc.metadata,
             filename: doc.metadata?.filename || 'Unknown'
           },
-          content: doc.content || '', // Use content from backend
+          content: doc.content || '',
           created_at: doc.created_at,
           cluster_id: categoryId
         };
@@ -100,36 +113,58 @@ export const useFileManagement = () => {
       setUploadedFiles(processedFiles);
       setTotalFilesCount(processedFiles.length);
       
-      // Calculate storage used
+      // Calculate total storage used
       const totalSize = processedFiles.reduce((sum, file) => {
         const size = file.metadata?.size || 0;
         return sum + size;
       }, 0);
       setStorageUsed(totalSize);
 
-      // Calculate category counts
-      const categoryMap = new Map<string, number>();
+      // Calculate category counts with proper ID mapping
+      // This map stores both the count and the actual database ID for each category
+      const categoryDataMap = new Map<string, { count: number; id: number }>();
+      
       processedFiles.forEach(file => {
-        const category = file.category;
-        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+        const categoryName = file.category;
+        const existingData = categoryDataMap.get(categoryName);
+        
+        if (existingData) {
+          // Increment count for existing category
+          existingData.count++;
+        } else {
+          // Find the category ID from the backend categories array
+          const categoryEntry = categoriesArray.find((cat: any) => cat.label === categoryName);
+          const categoryId = categoryEntry?.id || 0;
+          
+          console.log(`Mapping category "${categoryName}" to ID: ${categoryId}`);
+          
+          // Initialize new category with count and ID
+          categoryDataMap.set(categoryName, { 
+            count: 1, 
+            id: categoryId 
+          });
+        }
       });
 
-      const categories: CategoryCount[] = Array.from(categoryMap.entries()).map(([name, count]) => ({
+      // Convert map to CategoryCount array with proper IDs
+      const categories: CategoryCount[] = Array.from(categoryDataMap.entries()).map(([name, data]) => ({
+        id: data.id,
         name,
-        icon: null, // Will be set by parent component
-        count,
+        icon: null,
+        count: data.count,
         color: getCategoryColor(name)
       }));
 
+      console.log('Categories with IDs for sidebar:', categories);
       setCategoryCount(categories);
 
-      // Calculate frequent folders (most accessed categories)
+      // Calculate frequent folders (top 4 most used categories)
       const frequentFoldersData: FrequentFolder[] = categories
         .sort((a, b) => b.count - a.count)
         .slice(0, 4)
         .map(cat => ({
           name: cat.name,
-          icon: null, // Will be set by parent component
+          icon: null,
           color: cat.color,
           count: cat.count
         }));
@@ -143,6 +178,10 @@ export const useFileManagement = () => {
     }
   };
 
+  /**
+   * Handle file upload with processing status tracking
+   * Polls for completion before refreshing file list
+   */
   const handleFileUpload = async (files: FileList) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -153,27 +192,26 @@ export const useFileManagement = () => {
       try {
         const result = await uploadDocument(file, user.id);
         if (result.status === 'queued' || result.status === 'success') {
-          addNotification(`✅ ${file.name} uploaded successfully!`, 'success');
+          addNotification(`${file.name} uploaded successfully`, 'success');
           
-          // If there's a task_id, wait for completion before refreshing
+          // Wait for processing to complete if there's a task_id
           if (result.task_id) {
-            addNotification(`⏳ Processing ${file.name}...`, 'info');
+            addNotification(`Processing ${file.name}...`, 'info');
             
-            // Poll for task completion
             let attempts = 0;
-            const maxAttempts = 30; // 30 seconds max
+            const maxAttempts = 30;
             
             while (attempts < maxAttempts) {
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+              await new Promise(resolve => setTimeout(resolve, 1000));
               
               try {
                 const taskStatus = await getTaskStatus(result.task_id);
                 
                 if (taskStatus.status === 'completed') {
-                  addNotification(`✅ ${file.name} processed successfully!`, 'success');
+                  addNotification(`${file.name} processed successfully`, 'success');
                   break;
                 } else if (taskStatus.status === 'failed') {
-                  addNotification(`❌ Failed to process ${file.name}: ${taskStatus.error}`, 'error');
+                  addNotification(`Failed to process ${file.name}: ${taskStatus.error}`, 'error');
                   break;
                 }
                 
@@ -185,27 +223,30 @@ export const useFileManagement = () => {
             }
             
             if (attempts >= maxAttempts) {
-              addNotification(`⚠️ ${file.name} processing is taking longer than expected`, 'info');
+              addNotification(`${file.name} processing is taking longer than expected`, 'info');
             }
           }
           
-          // Small delay to ensure processing is complete
+          // Delay to ensure processing is complete
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // Refresh files after upload/processing
+          // Refresh files after upload and processing
           await fetchFiles();
         } else if (result.status === 'duplicate') {
-          addNotification(`⚠️ ${file.name} already exists`, 'info');
+          addNotification(`${file.name} already exists`, 'info');
         } else {
-          addNotification(`❌ Failed to upload ${file.name}`, 'error');
+          addNotification(`Failed to upload ${file.name}`, 'error');
         }
       } catch (error) {
         console.error('Upload failed:', error);
-        addNotification(`❌ Failed to upload ${file.name}: ${error}`, 'error');
+        addNotification(`Failed to upload ${file.name}: ${error}`, 'error');
       }
     }
   };
 
+  /**
+   * Delete a file from both database and storage
+   */
   const deleteFile = async (fileId: string, _fileName: string, storagePath?: string) => {
     try {
       // Delete from database
@@ -232,6 +273,9 @@ export const useFileManagement = () => {
     }
   };
 
+  /**
+   * Rename a file by updating its metadata
+   */
   const renameFile = async (fileId: string, newName: string) => {
     try {
       const { error } = await supabase
@@ -250,6 +294,7 @@ export const useFileManagement = () => {
     }
   };
 
+  // Initialize by fetching files on mount
   useEffect(() => {
     fetchFiles();
   }, []);
@@ -273,7 +318,13 @@ export const useFileManagement = () => {
   };
 };
 
-// Helper functions
+/**
+ * Helper Functions
+ */
+
+/**
+ * Format bytes to human-readable file size
+ */
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -282,6 +333,9 @@ const formatFileSize = (bytes: number): string => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
+/**
+ * Format date string to relative time (e.g., "2 hours ago")
+ */
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
   const now = new Date();
@@ -299,6 +353,9 @@ const formatDate = (dateString: string): string => {
   return `${Math.ceil(diffDays / 30)} month${Math.ceil(diffDays / 30) > 1 ? 's' : ''} ago`;
 };
 
+/**
+ * Get Tailwind CSS gradient class for a given category
+ */
 const getCategoryColor = (category: string): string => {
   const colors: Record<string, string> = {
     'Academic Work': 'bg-gradient-to-r from-blue-500 to-blue-600',
@@ -312,7 +369,8 @@ const getCategoryColor = (category: string): string => {
     'Social Sciences': 'bg-gradient-to-r from-teal-500 to-teal-600',
     'Professional Documents': 'bg-gradient-to-r from-amber-500 to-amber-600',
     'General Documents': 'bg-gradient-to-r from-gray-500 to-gray-600',
-    // Fallback for old categories
+    'Occupational Safety Health': 'bg-gradient-to-r from-yellow-500 to-yellow-600',
+    // Fallback for legacy categories
     Math: "bg-orange-500",
     Science: "bg-green-500",
     History: "bg-blue-500",
