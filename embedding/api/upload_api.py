@@ -56,26 +56,36 @@ async def upload_document(
         
         # Extract text based on file type
         content_str = await _extract_content(file, content_bytes)
+
+        #Get unique filename to avoid filename conflicts
+
+        unique_filename = _get_unique_filename(file.filename, user_id, db_service)
+
+        #Log if filename was changed
+        if unique_filename != file.filename:
+            logger.info(f"Renamed '{file.filename}' to '{unique_filename}' to avoid conflict")
         
         # Check for duplicates
         duplicate_id = doc_service.check_duplicate(content_str, user_id)
         if duplicate_id:
             logger.info(f"Duplicate detected: {duplicate_id}")
             return DocumentUploadResponse(
-                filename=file.filename,
+                filename=unique_filename,
                 status="duplicate",
                 message=f"Document already exists with ID {duplicate_id}",
                 doc_id=duplicate_id,
                 task_id=None,
                 timestamp=datetime.now()
+
             )
-        
+
         # Insert parent document to database (with FULL content)
         doc_id = db_service.insert_document(
             content=content_str,  # FULL CONTENT, not preview!
             metadata={
                 'user_id': user_id,
-                'filename': file.filename,
+                'filename': unique_filename,
+                'original_filename': file.filename,
                 'type': file.content_type,
                 'size': len(content_bytes)
             },
@@ -94,7 +104,7 @@ async def upload_document(
             doc_id=doc_id,
             user_id=user_id,
             content=content_str,  # Full content for processing
-            filename=file.filename,
+            filename=unique_filename,
             file_type=file.content_type or 'unknown',
             file_size=len(content_bytes)
         )
@@ -105,7 +115,7 @@ async def upload_document(
         logger.info(f"Task {task_id} queued for processing")
         
         return DocumentUploadResponse(
-            filename=file.filename,
+            filename=unique_filename,
             status="queued",
             message=f"Document uploaded. Task {task_id} queued for processing.",
             doc_id=doc_id,
@@ -269,6 +279,47 @@ async def _extract_content(file: UploadFile, content_bytes: bytes) -> str:
     except Exception as e:
         logger.error(f"Content extraction failed: {e}")
         return f"File: {file.filename} (extraction failed)"
+    
+
+def _get_unique_filename(filename: str, user_id: str, db_service) -> str:
+    """
+    Generate a unique filename by appending numbers if needed.
+    Example: document.pdf -> document (1).pdf -> document (2).pdf
+    
+    Args:
+        filename: Original filename
+        user_id: User ID
+        db_service: Database service instance
+    
+    Returns:
+        Unique filename
+    """
+    import os
+    
+    # Get all existing filenames for this user
+    existing_docs = db_service.get_documents_by_user(user_id)
+    existing_filenames = {
+        doc.get('metadata', {}).get('filename', '') 
+        for doc in existing_docs
+    }
+    
+    # If filename doesn't exist, return original
+    if filename not in existing_filenames:
+        return filename
+    
+    # Split filename into name and extension
+    name, ext = os.path.splitext(filename)
+    
+    # Find next available number
+    counter = 1
+    new_filename = f"{name} ({counter}){ext}"
+    
+    while new_filename in existing_filenames:
+        counter += 1
+        new_filename = f"{name} ({counter}){ext}"
+    
+    return new_filename
+
 
 
 @router.post("/initialize-categories")
