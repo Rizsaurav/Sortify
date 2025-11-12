@@ -217,7 +217,7 @@ export default function ChatbotPopup() {
                   key={suggestion}
                   onClick={() => {
                     setInputMessage(suggestion);
-                    inputRef.current?.focus();
+                    setTimeout(() => inputRef.current?.focus(), 0);
                   }}
                   className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 rounded-full whitespace-nowrap transition-colors"
                 >
@@ -241,7 +241,7 @@ export default function ChatbotPopup() {
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!inputMessage.trim()}
+                disabled={!inputMessage.trim() || isTyping}
                 className="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 aria-label="Send message"
               >
