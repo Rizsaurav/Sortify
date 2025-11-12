@@ -37,30 +37,6 @@ export default function ChatbotPopup() {
     }
   }, [isOpen]);
 
-  const generateBotResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return "Hello! How can I assist you with your files and studies today?";
-    }
-    if (lowerMessage.includes('upload') || lowerMessage.includes('file')) {
-      return "To upload files, click the 'Upload Files' button at the top of your dashboard or drag and drop files directly onto the page. I can help organize them automatically!";
-    }
-    if (lowerMessage.includes('search') || lowerMessage.includes('find')) {
-      return "You can search for files using the search bar at the top. Try searching by filename, category, or content. The AI Search feature can also help you find documents based on their content!";
-    }
-    if (lowerMessage.includes('organize') || lowerMessage.includes('category')) {
-      return "I automatically organize your files into categories like Assignments, Lectures, Research, Math, and Science based on their names and content. You can also filter by category using the sidebar!";
-    }
-    if (lowerMessage.includes('help') || lowerMessage.includes('how')) {
-      return "I can help you with:\n• Uploading and organizing files\n• Searching through documents\n• Understanding your storage usage\n• Finding specific assignments or notes\n\nWhat would you like to know more about?";
-    }
-    if (lowerMessage.includes('storage') || lowerMessage.includes('space')) {
-      return "You can check your storage usage in the bottom right sidebar. You have 15GB total storage. I can help you manage your files if you're running low on space!";
-    }
-
-    return "I'm here to help! You can ask me about uploading files, searching documents, organizing your work, or any other features of Sortify. What would you like to know?";
-  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
