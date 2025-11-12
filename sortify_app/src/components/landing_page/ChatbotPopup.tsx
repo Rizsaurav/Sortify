@@ -37,30 +37,6 @@ export default function ChatbotPopup() {
     }
   }, [isOpen]);
 
-  const generateBotResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-
-    if (lowerMessage.includes('hello') || lowerMessage.includes('hi')) {
-      return "Hello! How can I assist you with your files and studies today?";
-    }
-    if (lowerMessage.includes('upload') || lowerMessage.includes('file')) {
-      return "To upload files, click the 'Upload Files' button at the top of your dashboard or drag and drop files directly onto the page. I can help organize them automatically!";
-    }
-    if (lowerMessage.includes('search') || lowerMessage.includes('find')) {
-      return "You can search for files using the search bar at the top. Try searching by filename, category, or content. The AI Search feature can also help you find documents based on their content!";
-    }
-    if (lowerMessage.includes('organize') || lowerMessage.includes('category')) {
-      return "I automatically organize your files into categories like Assignments, Lectures, Research, Math, and Science based on their names and content. You can also filter by category using the sidebar!";
-    }
-    if (lowerMessage.includes('help') || lowerMessage.includes('how')) {
-      return "I can help you with:\n• Uploading and organizing files\n• Searching through documents\n• Understanding your storage usage\n• Finding specific assignments or notes\n\nWhat would you like to know more about?";
-    }
-    if (lowerMessage.includes('storage') || lowerMessage.includes('space')) {
-      return "You can check your storage usage in the bottom right sidebar. You have 15GB total storage. I can help you manage your files if you're running low on space!";
-    }
-
-    return "I'm here to help! You can ask me about uploading files, searching documents, organizing your work, or any other features of Sortify. What would you like to know?";
-  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -76,17 +52,72 @@ export default function ChatbotPopup() {
     setInputMessage('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    // --- NEW: Call Gemini API for a dynamic response ---
+    try {
+      // This is the system prompt that guides the AI's persona and knowledge
+      const systemPrompt = `You are 'Sortify Assistant,' a helpful and friendly chatbot for a student file organization app called 'Sortify.' 
+      Your role is to help students with their files, studies, and using the app.
+      You have knowledge of the app's features:
+      - Uploading files: Users can click 'Upload Files' or drag and drop.
+      - Searching: Users can search by filename, category, or content. There is also an 'AI Search' feature.
+      - Organization: The app automatically organizes files into categories like Assignments, Lectures, Research, Math, and Science.
+      - Storage: Users have 15GB total storage, which they can check in the sidebar.
+      
+      Keep your answers concise, friendly, and focused on helping the student.
+      Do not make up features that don't exist.`;
+
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [{ parts: [{ text: userMessage.text }] }],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      const botText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      let botResponseText = "Sorry, I couldn't generate a response. Please try again.";
+      if (botText) {
+        botResponseText = botText;
+      }
+
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: generateBotResponse(inputMessage),
+        text: botResponseText,
         sender: 'bot',
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, botResponse]);
+
+    } catch (error) {
+      console.error("Error fetching bot response:", error);
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I'm having trouble connecting right now. Please try again later.",
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+      // Ensure focus is returned to input after sending
+      inputRef.current?.focus();
+    }
+    // ---------------------------------------------------
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -186,7 +217,7 @@ export default function ChatbotPopup() {
                   key={suggestion}
                   onClick={() => {
                     setInputMessage(suggestion);
-                    inputRef.current?.focus();
+                    setTimeout(() => inputRef.current?.focus(), 0);
                   }}
                   className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 rounded-full whitespace-nowrap transition-colors"
                 >
@@ -210,7 +241,7 @@ export default function ChatbotPopup() {
               />
               <button
                 onClick={handleSendMessage}
-                disabled={!inputMessage.trim()}
+                disabled={!inputMessage.trim() || isTyping}
                 className="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 aria-label="Send message"
               >
