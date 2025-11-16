@@ -1,21 +1,27 @@
 import { cn } from "../lib/utils"
-import { Button } from "./UI/ui-core"
-import { Badge } from "./UI/ui-core"
+import { Badge, Button } from "./UI/ui-core"
 import {
-  FolderIcon,
-  DocumentIcon,
-  ChartBarIcon,
-  CogIcon,
-  HomeIcon,
-  MagnifyingGlassIcon,
-  CloudArrowUpIcon,
-  BookOpenIcon,
   AcademicCapIcon,
   BeakerIcon,
+  BookOpenIcon,
   CalculatorIcon,
+  ChartBarIcon,
+  CloudArrowUpIcon,
+  CogIcon,
+  DocumentIcon,
+  FolderIcon,
+  HomeIcon,
+  MagnifyingGlassIcon,
   PresentationChartLineIcon,
 } from "@heroicons/react/24/outline"
 
+// Constants
+const SIDEBAR_WIDTH = "w-64"
+const LOGO_HEIGHT = "h-16"
+const ICON_SIZE = "w-5 h-5"
+const BUTTON_HEIGHT = "h-10"
+
+// Navigation configuration
 const navigation = [
   { name: "Dashboard", href: "#", icon: HomeIcon, current: true },
   { name: "All Files", href: "#", icon: DocumentIcon, count: 1247 },
@@ -23,6 +29,7 @@ const navigation = [
   { name: "Upload", href: "#", icon: CloudArrowUpIcon },
 ]
 
+// Category configuration
 const categories = [
   { name: "Assignments", icon: BookOpenIcon, count: 89, color: "bg-blue-500" },
   { name: "Lectures", icon: AcademicCapIcon, count: 156, color: "bg-green-500" },
@@ -31,19 +38,31 @@ const categories = [
   { name: "Presentations", icon: PresentationChartLineIcon, count: 23, color: "bg-pink-500" },
 ]
 
+// Quick actions configuration
 const quickActions = [
   { name: "Analytics", href: "#", icon: ChartBarIcon },
   { name: "Settings", href: "#", icon: CogIcon },
 ]
 
+// Helper function to get navigation button styles
+const getNavigationButtonStyles = (isActive: boolean) => {
+  return cn(
+    "w-full justify-start gap-3",
+    BUTTON_HEIGHT,
+    isActive
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+  )
+}
+
 export function Sidebar() {
   return (
-    <div className="flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border">
+    <div className={cn("flex h-screen flex-col bg-sidebar border-r border-sidebar-border", SIDEBAR_WIDTH)}>
       {/* Logo */}
-      <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
+      <div className={cn("flex items-center px-6 border-b border-sidebar-border", LOGO_HEIGHT)}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <FolderIcon className="w-5 h-5 text-primary-foreground" />
+            <FolderIcon className={cn(ICON_SIZE, "text-primary-foreground")} />
           </div>
           <span className="text-xl font-bold text-sidebar-foreground">Sortify</span>
         </div>
@@ -59,14 +78,9 @@ export function Sidebar() {
               <li key={item.name}>
                 <Button
                   variant={item.current ? "secondary" : "ghost"}
-                  className={cn(
-                    "w-full justify-start gap-3 h-10",
-                    item.current
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  )}
+                  className={getNavigationButtonStyles(item.current || false)}
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className={ICON_SIZE} />
                   <span className="flex-1 text-left">{item.name}</span>
                   {item.count && (
                     <Badge variant="secondary" className="ml-auto">
@@ -87,7 +101,10 @@ export function Sidebar() {
               <li key={category.name}>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 h-10 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  className={cn(
+                    "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    BUTTON_HEIGHT
+                  )}
                 >
                   <div className={cn("w-3 h-3 rounded-full", category.color)} />
                   <span className="flex-1 text-left">{category.name}</span>
@@ -110,9 +127,12 @@ export function Sidebar() {
               <li key={item.name}>
                 <Button
                   variant="ghost"
-                  className="w-full justify-start gap-3 h-10 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  className={cn(
+                    "w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    BUTTON_HEIGHT
+                  )}
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className={ICON_SIZE} />
                   {item.name}
                 </Button>
               </li>

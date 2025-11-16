@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
-/* Custom animations for drag-and-drop and modals */
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+
+/* Fade in animation for modals and overlays */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -12,6 +16,7 @@
   }
 }
 
+/* Slide in animation for dropdowns and tooltips */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -23,6 +28,7 @@
   }
 }
 
+/* Animation utility classes */
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out;
 }
@@ -31,24 +37,44 @@
   animation: slideIn 0.15s ease-out;
 }
 
+/* ==========================================
+   THEME VARIABLES
+   ========================================== */
+
 @theme {
-  /* Light mode colors */
+  /* Base colors - Light mode */
   --color-background: oklch(0.98 0.005 264);
   --color-foreground: oklch(0.15 0.02 264);
+  
+  /* Card colors */
   --color-card: oklch(1 0 0);
   --color-card-foreground: oklch(0.15 0.02 264);
+  
+  /* Popover colors */
   --color-popover: oklch(1 0 0);
   --color-popover-foreground: oklch(0.15 0.02 264);
+  
+  /* Primary colors */
   --color-primary: oklch(0.55 0.18 264);
   --color-primary-foreground: oklch(0.98 0.005 264);
+  
+  /* Secondary colors */
   --color-secondary: oklch(0.96 0.01 264);
   --color-secondary-foreground: oklch(0.25 0.02 264);
+  
+  /* Muted colors */
   --color-muted: oklch(0.96 0.01 264);
   --color-muted-foreground: oklch(0.55 0.02 264);
+  
+  /* Accent colors */
   --color-accent: oklch(0.94 0.02 264);
   --color-accent-foreground: oklch(0.25 0.02 264);
+  
+  /* Destructive colors */
   --color-destructive: oklch(0.577 0.245 27.325);
   --color-destructive-foreground: oklch(0.98 0.005 264);
+  
+  /* Border and input colors */
   --color-border: oklch(0.92 0.01 264);
   --color-input: oklch(0.96 0.01 264);
   --color-ring: oklch(0.55 0.18 264);
@@ -63,33 +89,60 @@
   --color-sidebar-border: oklch(0.25 0.02 264);
   --color-sidebar-ring: oklch(0.55 0.18 264);
 
-  /* Radius */
+  /* Layout */
   --radius: 0.75rem;
+  
+  /* Animation timing */
+  --animation-duration-fast: 0.15s;
+  --animation-duration-normal: 0.2s;
+  --animation-timing: ease-out;
 }
+
+/* ==========================================
+   DARK MODE
+   ========================================== */
 
 @variant dark (&:is(.dark *));
 
 .dark {
+  /* Base colors - Dark mode */
   --color-background: oklch(0.08 0.01 264);
   --color-foreground: oklch(0.98 0.005 264);
+  
+  /* Card colors */
   --color-card: oklch(0.12 0.01 264);
   --color-card-foreground: oklch(0.98 0.005 264);
+  
+  /* Popover colors */
   --color-popover: oklch(0.12 0.01 264);
   --color-popover-foreground: oklch(0.98 0.005 264);
+  
+  /* Primary colors */
   --color-primary: oklch(0.65 0.18 264);
   --color-primary-foreground: oklch(0.08 0.01 264);
+  
+  /* Secondary colors */
   --color-secondary: oklch(0.16 0.01 264);
   --color-secondary-foreground: oklch(0.98 0.005 264);
+  
+  /* Muted colors */
   --color-muted: oklch(0.16 0.01 264);
   --color-muted-foreground: oklch(0.65 0.02 264);
+  
+  /* Accent colors */
   --color-accent: oklch(0.2 0.02 264);
   --color-accent-foreground: oklch(0.98 0.005 264);
+  
+  /* Destructive colors */
   --color-destructive: oklch(0.396 0.141 25.723);
   --color-destructive-foreground: oklch(0.98 0.005 264);
+  
+  /* Border and input colors */
   --color-border: oklch(0.2 0.01 264);
   --color-input: oklch(0.16 0.01 264);
   --color-ring: oklch(0.65 0.18 264);
   
+  /* Sidebar colors */
   --color-sidebar: oklch(0.12 0.01 264);
   --color-sidebar-foreground: oklch(0.98 0.005 264);
   --color-sidebar-primary: oklch(0.65 0.18 264);
@@ -99,6 +152,10 @@
   --color-sidebar-border: oklch(0.2 0.01 264);
   --color-sidebar-ring: oklch(0.65 0.18 264);
 }
+
+/* ==========================================
+   GLOBAL STYLES
+   ========================================== */
 
 * {
   border-color: var(--color-border);
