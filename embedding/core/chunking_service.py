@@ -135,7 +135,7 @@ class ChunkingService:
             
             current_chunk.append(sentence)
             current_word_count += sentence_words
-        s
+        
         if current_chunk:
             chunks.append(' '.join(current_chunk))
         
