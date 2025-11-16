@@ -64,50 +64,34 @@ class ChunkingService:
         )
     
     def chunk_text(self, text: str, preprocess: bool = True) -> List[str]:
-        
         if not text or not text.strip():
-            logger.warning("Empty text provided for chunking")
             return []
         
-        logger.debug(f"Chunking text: {len(text)} chars, {self._word_count(text)} words")
-        
-        # Preprocess if requested
         if preprocess:
             text = TextProcessor.clean_text(text)
-            logger.debug(f"After preprocessing: {len(text)} chars, {self._word_count(text)} words")
+            if not text.strip():
+                return []
         
-        # For very short texts, just return as single chunk
-        if self._word_count(text) < 20:
-            logger.debug("Short text, returning as single chunk")
+        word_count = self._word_count(text)
+        if word_count < 20:
             return [text]
         
-        # Split into sentences
+        # Try paragraph chunking first if text has paragraphs
+        if self.respect_paragraphs and '\n\n' in text:
+            chunks = self._chunk_by_paragraphs(text)
+            if chunks:
+                return self._refine_chunks(chunks)
+        
+        # Fall back to sentence chunking
         sentences = self._split_sentences(text)
-        
         if not sentences:
-            logger.warning("No sentences found after splitting")
             return []
         
-        logger.debug(f"Split into {len(sentences)} sentences")
-        
-        # Build chunks from sentences
         chunks = self._build_chunks_from_sentences(sentences)
-        
         if not chunks:
-            logger.warning("No chunks created from sentences")
             return []
         
-        min_words = max(5, self.min_chunk_size // 3)  # Much more lenient
-        filtered_chunks = [c for c in chunks if self._word_count(c) >= min_words]
-        
-        # If all chunks were filtered out, return the original chunks
-        if not filtered_chunks:
-            logger.warning(f"All chunks filtered out (min_words={min_words}), returning original chunks")
-            filtered_chunks = chunks
-        
-        logger.debug(f"Created {len(filtered_chunks)} chunks from {len(sentences)} sentences")
-        
-        return filtered_chunks
+        return self._refine_chunks(chunks)
     
     def _split_sentences(self, text: str) -> List[str]:
         
@@ -275,11 +259,47 @@ class ChunkingService:
         
         return chunks
     
+    def _refine_chunks(self, chunks: List[str]) -> List[str]:
+        """Merge tiny chunks and filter out noise."""
+        if not chunks:
+            return []
+        
+        refined = []
+        min_words = max(5, self.min_chunk_size // 3)
+        
+        i = 0
+        while i < len(chunks):
+            chunk = chunks[i]
+            chunk_words = self._word_count(chunk)
+            
+            # Try merging small chunks with next one
+            if chunk_words < min_words and i < len(chunks) - 1:
+                next_chunk = chunks[i + 1]
+                combined = f"{chunk}\n\n{next_chunk}"
+                combined_words = self._word_count(combined)
+                
+                # Merge if it makes sense
+                if combined_words <= self.chunk_size * 1.2:
+                    refined.append(combined)
+                    i += 2
+                    continue
+            
+            refined.append(chunk)
+            i += 1
+        
+        # Keep chunks that meet min size
+        filtered = [c for c in refined if self._word_count(c) >= min_words]
+        return filtered if filtered else refined
+    
     def get_chunk_metadata(self, chunk: str) -> dict:
+        has_paras = '\n\n' in chunk
+        para_count = len(self._paragraph_pattern.split(chunk)) if has_paras else 1
         
         return {
             'word_count': self._word_count(chunk),
-            'char_count': len(chunk)
+            'char_count': len(chunk),
+            'has_paragraphs': has_paras,
+            'paragraph_count': para_count
         }
     
     def estimate_chunks(self, text: str) -> int:
