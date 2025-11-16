@@ -151,7 +151,7 @@ class ChunkingService:
             
             current_chunk.append(sentence)
             current_word_count += sentence_words
-        
+        s
         if current_chunk:
             chunks.append(' '.join(current_chunk))
         
@@ -182,6 +182,98 @@ class ChunkingService:
     
     def _word_count(self, text: str) -> int:
         return len(text.split())
+    
+    def _chunk_by_paragraphs(self, text: str) -> List[str]:
+        """Chunk text by paragraphs instead of just sentences."""
+        paragraphs = self._paragraph_pattern.split(text)
+        paragraphs = [p.strip() for p in paragraphs if p.strip()]
+        
+        if not paragraphs:
+            return []
+        
+        chunks = []
+        current_chunk = []
+        current_word_count = 0
+        
+        for para in paragraphs:
+            para_words = self._word_count(para)
+            
+            # Handle really long paragraphs
+            if para_words > self.chunk_size:
+                if current_chunk:
+                    chunks.append('\n\n'.join(current_chunk))
+                    current_chunk = []
+                    current_word_count = 0
+                
+                # Split the long paragraph
+                sub_chunks = self._split_large_paragraph(para)
+                chunks.extend(sub_chunks)
+                continue
+            
+            # Check if we'd exceed chunk size
+            if current_word_count + para_words > self.chunk_size and current_chunk:
+                chunks.append('\n\n'.join(current_chunk))
+                
+                # Keep some context from previous chunk
+                if self.chunk_overlap > 0:
+                    overlap_paras = self._get_overlap_paragraphs(current_chunk, self.chunk_overlap)
+                    current_chunk = overlap_paras
+                    current_word_count = sum(self._word_count(p) for p in current_chunk)
+                else:
+                    current_chunk = []
+                    current_word_count = 0
+            
+            current_chunk.append(para)
+            current_word_count += para_words
+        
+        if current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+        
+        return chunks
+    
+    def _get_overlap_paragraphs(self, paragraphs: List[str], overlap_words: int) -> List[str]:
+        """Get last paragraphs that fit in overlap size."""
+        if not paragraphs or overlap_words == 0:
+            return []
+        
+        overlap_paras = []
+        word_count = 0
+        
+        for para in reversed(paragraphs):
+            para_words = self._word_count(para)
+            if word_count + para_words <= overlap_words:
+                overlap_paras.insert(0, para)
+                word_count += para_words
+            else:
+                break
+        
+        return overlap_paras
+    
+    def _split_large_paragraph(self, paragraph: str) -> List[str]:
+        """Split a paragraph that's too big into sentences."""
+        sentences = self._split_sentences(paragraph)
+        
+        chunks = []
+        current_chunk = []
+        current_word_count = 0
+        
+        for sentence in sentences:
+            sent_words = self._word_count(sentence)
+            
+            if current_word_count + sent_words > self.chunk_size and current_chunk:
+                chunks.append(' '.join(current_chunk))
+                # Keep last sentence or two for context
+                overlap = current_chunk[-2:] if len(current_chunk) >= 2 else current_chunk[-1:]
+                current_chunk = overlap
+                current_word_count = sum(self._word_count(s) for s in current_chunk)
+            
+            current_chunk.append(sentence)
+            current_word_count += sent_words
+        
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+        
+        return chunks
     
     def get_chunk_metadata(self, chunk: str) -> dict:
         
