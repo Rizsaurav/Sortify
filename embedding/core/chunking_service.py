@@ -12,22 +12,55 @@ logger = get_logger(__name__)
 
 
 class ChunkingService:
+    """
+    Handles text chunking with semantic awareness.
+    
+    Strategies:
+    - Paragraph-aware chunking (respects natural text boundaries)
+    - Sentence-based chunking with smart overlap
+    - Adaptive refinement for optimal chunk quality
+    """
     
     def __init__(
         self,
         chunk_size: int = None,
         chunk_overlap: int = None,
-        min_chunk_size: int = 50
+        min_chunk_size: int = 50,
+        respect_paragraphs: bool = True,
+        respect_headings: bool = True,
+        semantic_overlap: bool = True
     ):
-       
+        """
+        Initialize ChunkingService with configuration.
+        
+        Args:
+            chunk_size: Target chunk size in words
+            chunk_overlap: Overlap size in words for context preservation
+            min_chunk_size: Minimum acceptable chunk size in words
+            respect_paragraphs: Whether to respect paragraph boundaries
+            respect_headings: Whether to detect and preserve heading context
+            semantic_overlap: Whether to use semantic (paragraph-based) overlap
+        """
         settings = get_settings()
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
         self.min_chunk_size = min_chunk_size
+        self.respect_paragraphs = respect_paragraphs
+        self.respect_headings = respect_headings
+        self.semantic_overlap = semantic_overlap
+        
+        # Compile regex patterns once for performance
+        self._sentence_pattern = re.compile(r'(?<=[.!?])\s+(?=[A-Z])')
+        self._paragraph_pattern = re.compile(r'\n\s*\n+')  # Double newlines = paragraph break
+        self._heading_pattern = re.compile(
+            r'^\s*(#{1,6}\s+.+|[A-Z][^\n]{0,100}:?\s*)$',
+            re.MULTILINE
+        )
         
         logger.info(
             f"ChunkingService initialized (size={self.chunk_size}, "
-            f"overlap={self.chunk_overlap})"
+            f"overlap={self.chunk_overlap}, paragraphs={respect_paragraphs}, "
+            f"headings={respect_headings})"
         )
     
     def chunk_text(self, text: str, preprocess: bool = True) -> List[str]:
