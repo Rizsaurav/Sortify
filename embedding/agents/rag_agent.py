@@ -11,7 +11,7 @@ from core.chunking_service import ChunkingService
 from core.embedding_service import get_embedding_service
 from core.database_service import AsyncDatabaseService, get_database_service
 from config.settings import get_settings
-from sortify.embedding.utils.gemini_client import GeminiClient
+from utils.gemini_client import GeminiClient
 
 
 # Configure structured logging
@@ -286,7 +286,8 @@ class RAGAgent:
             
             # Chunking
             try:
-                chunks = self.chunker.split_text(text)
+                chunks = self.chunker.chunk_text(text)
+
                 if not chunks:
                     raise RAGException("Chunking produced no results")
                 logger.info(f"Created {len(chunks)} chunks")

@@ -1,6 +1,6 @@
 """
 Category Management API routes.
-Handles category CRUD operations and file category updates.
+Fully async — works with AsyncDatabaseService.
 """
 
 from datetime import datetime
@@ -18,13 +18,16 @@ router = APIRouter(
 )
 
 
+# 
+# GET CATEGORIES 
+# 
+
 @router.get("")
 async def get_categories(user_id: str = Query(...)):
     """Fetch all categories for a user."""
     try:
         db = get_database_service()
-        categories = db.get_categories_by_user(user_id)
-
+        categories = await db.get_categories_by_user(user_id)   # 👈 FIXED
         return {
             "success": True,
             "categories": categories,
@@ -34,6 +37,10 @@ async def get_categories(user_id: str = Query(...)):
         logger.error(f"Failed to fetch categories: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch categories")
 
+
+# 
+# CREATE CATEGORY
+# 
 
 @router.post("")
 async def create_category(
@@ -47,21 +54,18 @@ async def create_category(
     try:
         db = get_database_service()
 
-        # Check for duplicate labels
-        existing = db.get_categories_by_user(user_id)
+        existing = await db.get_categories_by_user(user_id)   # 👈 FIXED
+
         if any(cat["label"].lower() == label.lower() for cat in existing):
             raise HTTPException(status_code=400, detail="Category already exists")
 
-        category_id = db.create_category(
+        category_id = await db.create_category(   # 👈 FIXED
             label=label,
             user_id=user_id,
             color=color,
             type=type if type.strip() else None,
             user_created=user_created,
         )
-
-        if not category_id:
-            raise HTTPException(status_code=500, detail="Failed to create category")
 
         return {
             "success": True,
@@ -76,6 +80,9 @@ async def create_category(
         raise HTTPException(status_code=500, detail="Failed to create category")
 
 
+# UPDATE CATEGORY
+# 
+
 @router.put("/{category_id}")
 async def update_category(
     category_id: int,
@@ -87,7 +94,7 @@ async def update_category(
     try:
         db = get_database_service()
 
-        updated = db.update_category(
+        updated = await db.update_category(   # 👈 FIXED
             category_id=category_id,
             label=label,
             color=color,
@@ -99,12 +106,12 @@ async def update_category(
 
         return {"success": True, "message": "Category updated successfully"}
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Update category failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to update category")
 
+
+# DELETE CATEGORY
 
 @router.delete("/{category_id}")
 async def delete_category(
@@ -115,15 +122,15 @@ async def delete_category(
     try:
         db = get_database_service()
 
-        general = db.get_or_create_general_category(user_id)
+        general = await db.get_or_create_general_category(user_id)   # 👈 FIXED
 
-        moved_files = db.move_files_to_category(
+        moved_files = await db.move_files_to_category(   # 👈 FIXED
             from_category_id=category_id,
             to_category_id=general["id"],
             user_id=user_id,
         )
 
-        deleted = db.delete_category(category_id, user_id)
+        deleted = await db.delete_category(category_id, user_id)   # 👈 FIXED
 
         if not deleted:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -133,12 +140,14 @@ async def delete_category(
             "message": f"Category deleted. {moved_files} files moved to General Documents.",
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Delete category failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete category")
 
+
+# ============================================================
+# CHANGE FILE CATEGORY
+# ============================================================
 
 @router.put("/files/{file_id}/category")
 async def change_file_category(
@@ -150,27 +159,21 @@ async def change_file_category(
     try:
         db = get_database_service()
 
-        # Validate file existence
-        doc = db.get_document(file_id)
+        doc = await db.get_document(file_id)   
         if not doc:
             raise HTTPException(status_code=404, detail=f"File {file_id} not found")
 
-        updated = db.update_document(
+        updated = await db.update_document(    
             file_id,
             cluster_id=category_id,
             categorization_source="manual_edit",
         )
-
-        if not updated:
-            raise HTTPException(status_code=404, detail="Failed to update file category")
 
         return {
             "success": True,
             "message": f"File moved to '{category_name}' successfully",
         }
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Change file category failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to change file category")

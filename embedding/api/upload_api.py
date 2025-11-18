@@ -13,15 +13,15 @@ router = APIRouter(prefix="/upload", tags=["uploads"])
 agent = RAGAgent()
 
 
-# -------------------------------------------------------------
-# UPLOAD DOCUMENT
-# -------------------------------------------------------------
+# Upload document
 @router.post("", response_model=DocumentUploadResponse)
 async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user_id: str = Form(...)
 ):
+    import traceback
+
     try:
         db = get_database_service()
         task_manager = get_task_manager()
@@ -29,8 +29,8 @@ async def upload_document(
         file_bytes = await file.read()
         content = await _extract_content(file, file_bytes)
 
-        # 🔥 MUST AWAIT — fixed
         duplicate = await db.check_duplicate(content, user_id)
+
         if duplicate:
             return DocumentUploadResponse(
                 filename=file.filename,
@@ -41,7 +41,6 @@ async def upload_document(
                 timestamp=datetime.now(),
             )
 
-        # 🔥 MUST AWAIT — fixed
         doc_id = await db.insert_document(
             content=content,
             metadata={
@@ -56,16 +55,12 @@ async def upload_document(
 
         task_id = str(uuid.uuid4())
 
-        # Background job for embeddings + categorization
         background_tasks.add_task(
             agent.index_document,
             doc_id,
             content,
             user_id,
-            {
-                "filename": file.filename,
-                "type": file.content_type,
-            },
+            {"filename": file.filename, "type": file.content_type},
         )
 
         task_manager.add_task(
@@ -88,29 +83,23 @@ async def upload_document(
         )
 
     except Exception as e:
+        print("\nUPLOAD ERROR:", e)
+        print(traceback.format_exc(), "\n")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -------------------------------------------------------------
-# GET DOCUMENTS
-# -------------------------------------------------------------
+# Get all documents for a user
 @router.get("/documents")
 async def get_documents(user_id: str = Query(...)):
     try:
         db = get_database_service()
-
-        # 🔥 MUST AWAIT — fixed
         docs = await db.get_documents_by_user(user_id)
-
         return {"success": True, "documents": docs, "count": len(docs)}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -------------------------------------------------------------
-# TASK STATUS
-# -------------------------------------------------------------
+# Get background task status
 @router.get("/task-status/{task_id}", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str):
     try:
@@ -123,8 +112,6 @@ async def get_task_status(task_id: str):
         category_name = None
         if task.category_id:
             db = get_database_service()
-
-            # 🔥 MUST AWAIT — fixed
             cats = await db.get_categories_by_user(task.user_id)
 
             for c in cats:
@@ -149,16 +136,13 @@ async def get_task_status(task_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -------------------------------------------------------------
-# FILE CATEGORY LOOKUP
-# -------------------------------------------------------------
+# Get file category by document id
 @router.get("/file-category/{doc_id}", response_model=FileCategoryResponse)
 async def get_file_category(doc_id: str):
     try:
         db = get_database_service()
-
-        # 🔥 MUST AWAIT — fixed
         doc = await db.get_document(doc_id)
+
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
@@ -168,8 +152,6 @@ async def get_file_category(doc_id: str):
 
         if cluster_id:
             user_id = doc.get("metadata", {}).get("user_id")
-
-            # 🔥 MUST AWAIT — fixed
             cats = await db.get_categories_by_user(user_id)
 
             for c in cats:
@@ -191,22 +173,19 @@ async def get_file_category(doc_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# -------------------------------------------------------------
-# CONTENT EXTRACTION (PDF/TEXT/IMAGE)
-# -------------------------------------------------------------
+# Extract file content
 async def _extract_content(file: UploadFile, data: bytes) -> str:
     try:
         if file.content_type and file.content_type.startswith("text/"):
             return data.decode("utf-8", errors="ignore")
 
-        elif file.content_type == "application/pdf":
+        if file.content_type == "application/pdf":
             from pypdf import PdfReader
             reader = PdfReader(io.BytesIO(data))
-            return "\n\n".join(
-                p.extract_text() for p in reader.pages if p.extract_text()
-            ) or f"PDF: {file.filename} (no text)"
+            extracted = [p.extract_text() for p in reader.pages if p.extract_text()]
+            return "\n\n".join(extracted) if extracted else f"PDF: {file.filename} (no text)"
 
-        elif file.content_type.startswith("image/"):
+        if file.content_type and file.content_type.startswith("image/"):
             return f"Image: {file.filename}\nType: {file.content_type}\nSize: {len(data)} bytes"
 
         return f"File: {file.filename}\nType: {file.content_type or 'unknown'}"
@@ -215,16 +194,13 @@ async def _extract_content(file: UploadFile, data: bytes) -> str:
         return f"File: {file.filename} (extraction failed)"
 
 
-# -------------------------------------------------------------
-# OPTIONAL: INIT DEFAULT CATEGORIES
-# -------------------------------------------------------------
+# Initialize standard categories for a user
 @router.post("/initialize-categories")
 async def initialize_user_categories(user_id: str):
     try:
         from services import get_improved_categorization_service
         cat_service = get_improved_categorization_service()
 
-        # 🔥 MUST AWAIT — fixed (if this function is async)
         ids = await cat_service.initialize_standard_categories(user_id)
 
         if ids:
@@ -235,6 +211,5 @@ async def initialize_user_categories(user_id: str):
             }
 
         return {"success": False, "message": "Categories already exist"}
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

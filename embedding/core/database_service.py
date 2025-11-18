@@ -1,7 +1,6 @@
 """
-Async Database Service for Supabase
-Non-blocking, timeout-safe, retry-safe.
-Uses REST API (the ONLY correct async method for Supabase).
+Async Database Service for Supabase.
+Single responsibility: all DB I/O, via REST API, with retry and timeouts.
 """
 
 import json
@@ -12,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from utils import get_logger
 from config import get_database_config
+import uuid
+
 
 logger = get_logger(__name__)
 
@@ -27,56 +28,92 @@ class AsyncDatabaseService:
         self.key = key or cfg.key
 
         self.rest_url = f"{self.url}/rest/v1"
-        self.headers = {
+        self.base_headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         self.client = httpx.AsyncClient(timeout=TIMEOUT)
-        logger.info("✓ Async Supabase database client initialized")
+        logger.info("Async Supabase database client initialized")
 
-    # -------------------------------------------------------
-    # Internal async helper (retry + timeout)
-    # -------------------------------------------------------
-    async def _request(self, method: str, endpoint: str, **kwargs) -> Any:
+    async def _request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        params: Optional[Dict[str, Any]] = None,
+        json_body: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Any:
         url = f"{self.rest_url}/{endpoint}"
+        merged_headers = self.base_headers.copy()
+        if headers:
+            merged_headers.update(headers)
+
+        last_err = None
 
         for attempt in range(1, RETRIES + 1):
             try:
-                response = await self.client.request(
-                    method, url, headers=self.headers, **kwargs
+                resp = await self.client.request(
+                    method,
+                    url,
+                    headers=merged_headers,
+                    params=params,
+                    json=json_body,
                 )
-
-                if response.status_code >= 400:
-                    raise Exception(response.text)
-
-                return response.json()
-
+                if resp.status_code >= 400:
+                    raise Exception(f"{resp.status_code}: {resp.text}")
+                if resp.text:
+                    try:
+                        return resp.json()
+                    except ValueError:
+                        return resp.text
+                return None
             except Exception as e:
-                logger.error(f"[DB] Attempt {attempt} failed: {e}")
-
+                last_err = e
+                logger.error(f"[DB] Request {method} {endpoint} attempt {attempt} failed: {e}")
                 if attempt == RETRIES:
                     raise
                 await asyncio.sleep(0.3 * attempt)
 
-    # -------------------------------------------------------
-    # DOCUMENTS
-    # -------------------------------------------------------
-    async def insert_document(self, content, metadata, embedding=None, cluster_id=None) -> str:
-        data = {
+        raise last_err
+
+    # ------------------------- Documents -------------------------
+
+    async def insert_document(
+        self,
+        content: str,
+        metadata: Dict[str, Any],
+        embedding: Optional[np.ndarray] = None,
+        cluster_id: Optional[int] = None,
+    ) -> str:
+        import hashlib
+
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+        record: Dict[str, Any] = {
             "content": content,
-            "metadata": metadata,
-            "embedding": embedding.tolist() if isinstance(embedding, np.ndarray) else embedding,
-            "cluster_id": cluster_id
+            "metadata": metadata or {},
+            "content_hash": content_hash,
+            "cluster_id": cluster_id,
         }
 
-        res = await self._request(
-            "POST", "documents",
-            json=data,
-            params={"select": "id"}
+        if embedding is not None:
+            record["embedding"] = embedding.tolist()
+
+        rows = await self._request(
+            "POST",
+            "documents",
+            params={"select": "id"},
+            json_body=record,
+            headers={"Prefer": "return=representation"},
         )
-        return res[0]["id"]
+
+        if not rows or "id" not in rows[0]:
+            raise RuntimeError("Failed to insert document or retrieve ID")
+
+        return rows[0]["id"]
 
     async def update_document(self, doc_id: str, **updates) -> bool:
         for k, v in updates.items():
@@ -85,112 +122,265 @@ class AsyncDatabaseService:
 
         await self._request(
             "PATCH",
-            f"documents?id=eq.{doc_id}",
-            json=updates
+            "documents",
+            params={"id": f"eq.{doc_id}"},
+            json_body=updates,
         )
         return True
 
     async def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
-        res = await self._request(
-            "GET",
-            f"documents",
-            params={"id": f"eq.{doc_id}", "select": "*"}
-        )
-        return res[0] if res else None
-
-    async def get_documents_by_user(self, user_id: str):
-        res = await self._request(
-            "GET", "documents", params={"select": "*"}
-        )
-        return [d for d in res if d.get("metadata", {}).get("user_id") == user_id]
-
-    async def check_duplicate_by_hash(self, content_hash: str, user_id: str):
-        res = await self._request(
+        rows = await self._request(
             "GET",
             "documents",
-            params={"content_hash": f"eq.{content_hash}", "select": "id"}
+            params={"id": f"eq.{doc_id}", "select": "*"},
+        )
+        return rows[0] if rows else None
+
+    async def get_documents_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        rows = await self._request(
+            "GET",
+            "documents",
+            params={"select": "*"},
+        )
+        docs: List[Dict[str, Any]] = []
+        for doc in rows or []:
+            meta = doc.get("metadata") or {}
+            if isinstance(meta, dict) and meta.get("user_id") == user_id:
+                docs.append(doc)
+        return docs
+
+    async def check_duplicate(self, content: str, user_id: str) -> Optional[str]:
+        import hashlib
+
+        content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+        rows = await self._request(
+            "GET",
+            "documents",
+            params={
+                "content_hash": f"eq.{content_hash}",
+                "select": "id,metadata",
+            },
         )
 
-        for d in res:
-            full = await self.get_document(d["id"])
-            if full and full["metadata"].get("user_id") == user_id:
-                return d["id"]
+        for row in rows or []:
+            meta = row.get("metadata") or {}
+            if isinstance(meta, dict) and meta.get("user_id") == user_id:
+                return row["id"]
 
         return None
 
-    # -------------------------------------------------------
-    # CHUNKS
-    # -------------------------------------------------------
-    async def insert_chunk(self, chunk_id, document_id, chunk_index, content, embedding, word_count, char_count):
-        data = {
+    # ------------------------- Chunks -------------------------
+
+    async def insert_chunk(
+        self,
+        chunk_id: str,
+        document_id: str,
+        chunk_index: int,
+        content: str,
+        embedding: np.ndarray,
+        word_count: int,
+        char_count: int,
+        user_id: Optional[str] = None,
+        cluster_id: Optional[int] = None,
+    ) -> bool:
+        record: Dict[str, Any] = {
             "id": chunk_id,
             "document_id": document_id,
             "chunk_index": chunk_index,
             "content": content,
             "embedding": embedding.tolist(),
             "word_count": word_count,
-            "char_count": char_count
+            "char_count": char_count,
         }
 
-        await self._request("POST", "document_chunks", json=data)
+        if user_id is not None:
+            record["user_id"] = user_id
+        if cluster_id is not None:
+            record["cluster_id"] = cluster_id
+
+        await self._request(
+            "POST",
+            "document_chunks",
+            json_body=record,
+        )
         return True
 
-    async def get_chunks_by_document(self, document_id: str):
-        return await self._request(
+    async def get_chunks_by_document(self, document_id: str) -> List[Dict[str, Any]]:
+        rows = await self._request(
             "GET",
             "document_chunks",
             params={
                 "document_id": f"eq.{document_id}",
                 "select": "*",
-                "order": "chunk_index.asc"
-            }
+                "order": "chunk_index.asc",
+            },
+        )
+        return rows or []
+
+    # ------------------------- Categories / Clusters -------------------------
+
+    async def insert_category(
+        self,
+        label: str,
+        centroid: Optional[np.ndarray],
+        user_id: str,
+        color: str = "#6B7280",
+        type: str = "",
+        user_created: bool = False,
+    ) -> int:
+        record: Dict[str, Any] = {
+            "label": label,
+            "user_id": user_id,
+            "color": color,
+            "type": type,
+            "user_created": user_created,
+        }
+
+        if centroid is not None:
+            record["centroid"] = centroid.tolist()
+
+        rows = await self._request(
+            "POST",
+            "clusters",
+            params={"select": "id"},
+            json_body=record,
+            headers={"Prefer": "return=representation"},
         )
 
-    # -------------------------------------------------------
-    # CATEGORIES
-    # -------------------------------------------------------
-    async def insert_category(self, label: str, centroid, user_id: str) -> int:
-        data = {
-            "label": label,
-            "centroid": centroid.tolist(),
-            "user_id": user_id
-        }
-        res = await self._request("POST", "clusters", json=data, params={"select": "id"})
-        return res[0]["id"]
+        return rows[0]["id"]
 
-    async def update_category(self, category_id: int, **updates):
+    async def create_category(
+        self,
+        label: str,
+        user_id: str,
+        color: str = "#6B7280",
+        type: str = "",
+        user_created: bool = True,
+        centroid: Optional[np.ndarray] = None,
+    ) -> int:
+        return await self.insert_category(
+            label=label,
+            centroid=centroid,
+            user_id=user_id,
+            color=color,
+            type=type,
+            user_created=user_created,
+        )
+
+    async def update_category(self, category_id: int, **updates) -> bool:
         for k, v in updates.items():
             if isinstance(v, np.ndarray):
                 updates[k] = v.tolist()
 
-        await self._request("PATCH", f"clusters?id=eq.{category_id}", json=updates)
+        await self._request(
+            "PATCH",
+            "clusters",
+            params={"id": f"eq.{category_id}"},
+            json_body=updates,
+        )
         return True
 
-    async def get_categories_by_user(self, user_id: str):
-        return await self._request(
+    async def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        rows = await self._request(
             "GET",
             "clusters",
-            params={"user_id": f"eq.{user_id}", "select": "*"}
+            params={"user_id": f"eq.{user_id}", "select": "*"},
+        )
+        return rows or []
+
+    async def get_or_create_general_category(self, user_id: str) -> Dict[str, Any]:
+        categories = await self.get_categories_by_user(user_id)
+        for c in categories:
+            if c.get("label") == "General Documents":
+                return c
+
+        cat_id = await self.insert_category(
+            label="General Documents",
+            centroid=None,
+            user_id=user_id,
+            color="#9CA3AF",
+            type="system",
+            user_created=False,
         )
 
-    # -------------------------------------------------------
-    # UTIL
-    # -------------------------------------------------------
-    def parse_embedding(self, data):
-        if data is None:
+        return {
+            "id": cat_id,
+            "label": "General Documents",
+            "user_id": user_id,
+            "color": "#9CA3AF",
+            "type": "system",
+            "user_created": False,
+        }
+
+    #store embeddings
+    async def store_embeddings(self, document_id: str, user_id: str, chunks, embeddings, metadata):
+        await self.update_document(
+            document_id,
+            total_chunks=len(chunks),
+            is_chunked=True,
+            metadata=metadata,
+        )
+
+        for idx, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+            chunk_id = f"{document_id}_{idx}_{uuid.uuid4().hex[:8]}"
+
+            await self.insert_chunk(
+                chunk_id=chunk_id,
+                document_id=document_id,
+                chunk_index=idx,
+                content=chunk,
+                embedding=emb,
+                word_count=len(chunk.split()),
+                char_count=len(chunk),
+            )
+        return True
+
+
+
+
+    async def move_files_to_category(
+        self,
+        from_category_id: int,
+        to_category_id: int,
+        user_id: str,
+    ) -> int:
+        docs = await self.get_documents_by_user(user_id)
+        to_move = [d for d in docs if d.get("cluster_id") == from_category_id]
+
+        count = 0
+        for doc in to_move:
+            await self.update_document(doc["id"], cluster_id=to_category_id)
+            count += 1
+        return count
+
+    async def delete_category(self, category_id: int, user_id: str) -> bool:
+        await self._request(
+            "DELETE",
+            "clusters",
+            params={"id": f"eq.{category_id}", "user_id": f"eq.{user_id}"},
+        )
+        return True
+
+    # ------------------------- Helpers -------------------------
+
+    def parse_embedding(self, embedding_data: Any) -> Optional[np.ndarray]:
+        try:
+            if embedding_data is None:
+                return None
+            if isinstance(embedding_data, str):
+                embedding_data = json.loads(embedding_data)
+            return np.array(embedding_data, dtype=np.float32)
+        except Exception as e:
+            logger.error(f"Failed to parse embedding: {e}")
             return None
-        if isinstance(data, str):
-            data = json.loads(data)
-        return np.array(data, dtype=np.float32)
 
 
-# -------------------------------------------------------
-# SINGLETON
-# -------------------------------------------------------
-_db = None
+_db_service: Optional[AsyncDatabaseService] = None
+
 
 def get_database_service() -> AsyncDatabaseService:
-    global _db
-    if _db is None:
-        _db = AsyncDatabaseService()
-    return _db
+    global _db_service
+    if _db_service is None:
+        _db_service = AsyncDatabaseService()
+    return _db_service

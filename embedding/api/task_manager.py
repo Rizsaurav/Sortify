@@ -2,14 +2,22 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Optional
 from collections import deque
-from models import TaskInfo, TaskStatus
-from agents.rag_agent import RAGAgent
 
-agent = RAGAgent()
+from models import TaskInfo, TaskStatus
+from sortify.embedding.agents.rag_agent import RAGAgent
+
+# Singleton RAGAgent
+_rag_agent: Optional[RAGAgent] = None
+
+def get_rag_agent() -> RAGAgent:
+    global _rag_agent
+    if _rag_agent is None:
+        _rag_agent = RAGAgent()
+    return _rag_agent
 
 
 class TaskManager:
-    # Handles background document processing with automatic async queueing
+    # Manages background categorization and embedding tasks
     def __init__(self):
         self.tasks: Dict[str, TaskInfo] = {}
         self.queue: deque[str] = deque()
@@ -19,8 +27,8 @@ class TaskManager:
         self._max_retries = 3
         self._retry_delay = 2.0
 
-    def add_task(self, task_id: str, doc_id: str, user_id: str, content: str, filename: str, file_type: str, file_size: int):
-        # Add new task and trigger background worker
+    def add_task(self, task_id: str, doc_id: str, user_id: str, content: str,
+                 filename: str, file_type: str, file_size: int):
         task = TaskInfo(
             task_id=task_id,
             doc_id=doc_id,
@@ -29,36 +37,42 @@ class TaskManager:
             status=TaskStatus.PENDING,
             created_at=datetime.now(),
         )
-        task.metadata = {"filename": filename, "file_type": file_type, "file_size": file_size}
+        task.metadata = {
+            "filename": filename,
+            "file_type": file_type,
+            "file_size": file_size
+        }
         self.tasks[task_id] = task
         self.queue.append(task_id)
+
         if not self.is_processing:
             asyncio.create_task(self.process_queue())
 
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
-        # Retrieve task by ID
         return self.tasks.get(task_id)
 
     async def process_queue(self):
-        # Process queued tasks concurrently with retries
         async with self._lock:
             if self.is_processing:
                 return
             self.is_processing = True
+
         try:
             while self.queue:
-                # Create a batch of concurrent tasks (e.g., 2 at a time)
-                batch = [self.queue.popleft() for _ in range(min(self._max_concurrent_tasks, len(self.queue)))]
+                batch_size = min(self._max_concurrent_tasks, len(self.queue))
+                batch = [self.queue.popleft() for _ in range(batch_size)]
                 await asyncio.gather(*(self._process_single_task(tid) for tid in batch))
         finally:
             self.is_processing = False
 
     async def _process_single_task(self, task_id: str):
-        # Process a single task with retry logic
         task = self.tasks.get(task_id)
         if not task:
             return
+
+        agent = get_rag_agent()
         task.status = TaskStatus.PROCESSING
+
         retries = 0
         while retries < self._max_retries:
             try:
@@ -68,6 +82,7 @@ class TaskManager:
                     user_id=task.user_id,
                     metadata=task.metadata,
                 )
+
                 task.status = TaskStatus.COMPLETED
                 task.completed_at = datetime.now()
                 return
@@ -80,11 +95,9 @@ class TaskManager:
                 await asyncio.sleep(self._retry_delay * retries)
 
     def get_queue_size(self) -> int:
-        # Return queue size
         return len(self.queue)
 
     def get_stats(self) -> Dict:
-        # Return task metrics
         return {
             "total_tasks": len(self.tasks),
             "pending": sum(1 for t in self.tasks.values() if t.status == TaskStatus.PENDING),
@@ -96,12 +109,9 @@ class TaskManager:
         }
 
 
-# Singleton accessor
 _task_manager: Optional[TaskManager] = None
 
-
 def get_task_manager() -> TaskManager:
-    # Return singleton instance
     global _task_manager
     if _task_manager is None:
         _task_manager = TaskManager()

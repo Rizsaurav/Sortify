@@ -503,6 +503,9 @@ class ChunkingService:
     def get_metrics(self) -> Dict[str, Any]:
         """Return current chunking metrics snapshot."""
         return dict(self.metrics)
+    
+    def split_text(self, text: str):
+        return self.chunk_text(text)
 
 
 # ----------------------------------------------------------------------
