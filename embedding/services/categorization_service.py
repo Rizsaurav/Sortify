@@ -1,7 +1,7 @@
 """
 Async semantic categorization service.
 Semantic → keyword → general fallback.
-Now with validation, timeout-aware retry, metrics, and full decision logging.
+Now compatible with async Supabase layer.
 """
 
 import numpy as np
@@ -18,24 +18,25 @@ logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------
-# Async retry with timeout
+# Async retry helper
 # ---------------------------------------------------------
-async def async_retry(fn, attempts=3, delay=0.2, timeout=2.0):
-    """Retry async function with delay + timeout per attempt."""
+async def async_retry(fn, attempts=3, delay=0.25, timeout=4.0):
+    """Retry async function with timeout + exponential delay."""
     last_err = None
 
-    for _ in range(attempts):
+    for attempt in range(1, attempts + 1):
         try:
             return await asyncio.wait_for(fn(), timeout=timeout)
         except Exception as e:
             last_err = e
-            await asyncio.sleep(delay)
+            logger.error(f"[Retry {attempt}/{attempts}] {e}")
+            await asyncio.sleep(delay * attempt)
 
     raise last_err
 
 
 class CategorizationService:
-    """Async semantic categorizer with keyword fallback + metrics."""
+    """Async semantic categorizer with keyword fallback and metrics."""
 
     KEYWORD_MAP = {
         "Academic Work": ["assignment", "homework", "essay", "project", "submission"],
@@ -50,7 +51,6 @@ class CategorizationService:
     }
 
     def __init__(self):
-        """Initialize async services + metrics."""
         settings = get_settings()
         self.threshold = settings.similarity_threshold
 
@@ -65,13 +65,12 @@ class CategorizationService:
             "errors": 0,
         }
 
-        logger.info("Async CategorizationService initialized.")
+        logger.info("✓ Async CategorizationService initialized.")
 
     # ---------------------------------------------------------
     # Validation
     # ---------------------------------------------------------
     def _validate_inputs(self, document_id: str, user_id: str, filename: str):
-        """Validate categorization input parameters."""
         if not document_id or not isinstance(document_id, str):
             raise ValueError("Invalid document_id")
 
@@ -82,28 +81,22 @@ class CategorizationService:
             raise ValueError("Invalid filename")
 
     # ---------------------------------------------------------
-    # Vector helpers
+    # Helpers
     # ---------------------------------------------------------
     def _to_vec(self, v) -> Optional[np.ndarray]:
+        if v is None:
+            return None
         try:
-            if v is None:
-                return None
             return np.array(v, dtype=np.float32)
         except:
             return None
 
     def _similarity(self, a: np.ndarray, b: np.ndarray) -> float:
         try:
-            return float(cosine_similarity(
-                a.reshape(1, -1),
-                b.reshape(1, -1)
-            )[0, 0])
+            return float(cosine_similarity(a.reshape(1, -1), b.reshape(1, -1))[0, 0])
         except:
             return 0.0
 
-    # ---------------------------------------------------------
-    # Keyword fallback
-    # ---------------------------------------------------------
     def _keyword_guess(self, text: str) -> Optional[str]:
         t = text.lower()
         for category, words in self.KEYWORD_MAP.items():
@@ -111,9 +104,6 @@ class CategorizationService:
                 return category
         return None
 
-    # ---------------------------------------------------------
-    # Semantic matching
-    # ---------------------------------------------------------
     def _semantic_best(self, embedding: np.ndarray, categories: List[Dict]):
         best = None
         best_sim = -1.0
@@ -161,22 +151,21 @@ class CategorizationService:
         decision_log = {}
 
         try:
-            # Validate inputs
+            # 0) Validate
             self._validate_inputs(document_id, user_id, filename)
 
-            # Load document
+            # 1) Load document
             doc = await async_retry(lambda: self.db.get_document(document_id))
             if not doc:
                 raise ValueError("Document not found")
-
             content = doc.get("content", "")
 
-            # Load chunks
+            # 2) Load chunks
             chunks = await async_retry(lambda: self.db.get_chunks_by_document(document_id))
             if not chunks:
                 raise ValueError("No chunks found")
 
-            # Extract vectors
+            # 3) Convert embeddings
             vectors = []
             for c in chunks:
                 parsed = self.db.parse_embedding(c.get("embedding"))
@@ -185,17 +174,17 @@ class CategorizationService:
                     vectors.append(v)
 
             if not vectors:
-                raise ValueError("No valid embeddings")
+                raise ValueError("No valid chunk embeddings")
 
-            # Aggregate embedding
+            # 4) Aggregate embedding
             embedding = np.mean(vectors, axis=0)
             embedding /= (np.linalg.norm(embedding) + 1e-8)
 
-            # Save document embedding
+            # Save embedding
             await async_retry(lambda: self.db.update_document(document_id, embedding=embedding.tolist()))
             decision_log["embedding_saved"] = True
 
-            # Load categories
+            # 5) Load categories
             categories = await async_retry(lambda: self.db.get_categories_by_user(user_id))
             if not categories:
                 general = await async_retry(lambda: self.db.get_or_create_general_category(user_id))
@@ -209,7 +198,7 @@ class CategorizationService:
                     "log": decision_log
                 }
 
-            # 1) semantic
+            # 6) Semantic match
             best = self._semantic_best(embedding, categories)
             decision_log["semantic_match"] = best
 
@@ -233,7 +222,7 @@ class CategorizationService:
                     "log": decision_log
                 }
 
-            # 2) keyword fallback
+            # 7) Keyword fallback
             guess = self._keyword_guess(filename + " " + content)
             decision_log["keyword_guess"] = guess
 
@@ -250,7 +239,7 @@ class CategorizationService:
                         "log": decision_log
                     }
 
-            # 3) fallback
+            # 8) Hard fallback → General Documents
             general = next((c for c in categories if c["label"] == "General Documents"), None)
             if not general:
                 general = await async_retry(lambda: self.db.get_or_create_general_category(user_id))

@@ -8,10 +8,11 @@ import time
 from functools import wraps
 
 from core.chunking_service import ChunkingService
-from core.embedding_service import EmbeddingService
-from core.database_service import DatabaseService
+from core.embedding_service import get_embedding_service
+from core.database_service import AsyncDatabaseService, get_database_service
 from config.settings import get_settings
 from sortify.embedding.utils.gemini_client import GeminiClient
+
 
 # Configure structured logging
 logging.basicConfig(
@@ -173,8 +174,8 @@ class RAGAgent:
         
         # Initialize services with error handling
         try:
-            self.db = DatabaseService()
-            self.embedder = EmbeddingService()
+            self.db = get_database_service()
+            self.embedder = get_embedding_service()
             self.chunker = ChunkingService()
             self.llm = GeminiClient()
             logger.info("RAGAgent initialized successfully")

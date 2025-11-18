@@ -9,14 +9,21 @@ logger = get_logger(__name__)
 
 
 class EmbeddingService:
-    # Handles embedding generation using SentenceTransformer
+    """Async embedding generator using SentenceTransformer."""
+
     def __init__(self, model_name: Optional[str] = None, device: Optional[str] = None):
         config = get_model_config()
         self.model_name = model_name or config.embedding_model_name
         self.device = device or config.device
-        self.embedding_dim = config.embedding_dim
+
         try:
-            self.model = SentenceTransformer(self.model_name, device=self.device)
+            self.model = SentenceTransformer(self.model_name)
+            self.model.to(self.device)
+
+            # ALWAYS get real dimension from model
+            self.embedding_dim = self.model.get_sentence_embedding_dimension()
+
+            logger.info(f"✓ Loaded embedding model: {self.model_name} ({self.embedding_dim} dim)")
         except Exception as e:
             raise RuntimeError(f"Failed to load embedding model {self.model_name}: {e}")
 
@@ -27,30 +34,38 @@ class EmbeddingService:
         normalize: bool = True,
         is_query: bool = False,
     ) -> np.ndarray:
-        # Generate embeddings asynchronously with instruction prompt
+        """Generate embeddings asynchronously."""
         if isinstance(texts, str):
             texts = [texts]
 
-        processed_texts = []
+        processed = []
         for t in texts:
             text = t["content"] if isinstance(t, dict) else t
             text = text.strip()
             prefix = "query:" if is_query else "passage:"
-            processed_texts.append(f"{prefix} {text}")
+            processed.append(f"{prefix} {text}")
 
-        embeddings = await asyncio.to_thread(
-            self.model.encode,
-            processed_texts,
-            batch_size=batch_size,
-            show_progress_bar=False,
-            normalize_embeddings=normalize,
-            convert_to_numpy=True,
-        )
+        try:
+            embeddings = await asyncio.to_thread(
+                self.model.encode,
+                processed,
+                batch_size=batch_size,
+                show_progress_bar=False,
+                normalize_embeddings=normalize,
+                convert_to_numpy=True,
+            )
+        except Exception as e:
+            logger.error(f"Embedding generation failed: {e}")
+            raise RuntimeError("Embedding generation failed")
+
+        # Safety normalization
+        if normalize:
+            embeddings = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-8)
 
         return embeddings
 
     def to_float_list(self, embeddings: np.ndarray) -> List[List[float]]:
-        # Convert NumPy array to Python list for Supabase pgvector
+        """Convert numpy embeddings to a Python list for pgvector."""
         if embeddings.ndim == 1:
             return embeddings.astype(float).tolist()
         return [e.astype(float).tolist() for e in embeddings]
