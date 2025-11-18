@@ -1,115 +1,122 @@
-import asyncio
 from datetime import datetime
-from typing import Dict, Optional
-from collections import deque
+from typing import Dict, Optional, Any
 
 from models import TaskInfo, TaskStatus
-from sortify.embedding.agents.rag_agent import RAGAgent
-
-# Singleton RAGAgent
-_rag_agent: Optional[RAGAgent] = None
-
-def get_rag_agent() -> RAGAgent:
-    global _rag_agent
-    if _rag_agent is None:
-        _rag_agent = RAGAgent()
-    return _rag_agent
 
 
 class TaskManager:
-    # Manages background categorization and embedding tasks
-    def __init__(self):
-        self.tasks: Dict[str, TaskInfo] = {}
-        self.queue: deque[str] = deque()
-        self.is_processing = False
-        self._lock = asyncio.Lock()
-        self._max_concurrent_tasks = 2
-        self._max_retries = 3
-        self._retry_delay = 2.0
+    """
+    Lightweight task tracker for document indexing.
 
-    def add_task(self, task_id: str, doc_id: str, user_id: str, content: str,
-                 filename: str, file_type: str, file_size: int):
+    IMPORTANT:
+    - This class NO LONGER runs the RAG agent or does any indexing.
+    - It ONLY tracks task metadata and status for the API (/upload/task-status).
+    - The actual work (agent.index_document) should be triggered elsewhere
+      (e.g., FastAPI BackgroundTasks in upload_router).
+    """
+
+    def __init__(self) -> None:
+        # task_id -> TaskInfo
+        self.tasks: Dict[str, TaskInfo] = {}
+
+    # Creation
+
+    def add_task(
+        self,
+        task_id: str,
+        doc_id: str,
+        user_id: str,
+        status: TaskStatus = TaskStatus.PENDING,
+        metadata: Optional[Dict[str, Any]] = None,
+        category_id: Optional[str] = None,
+    ) -> TaskInfo:
+        """
+        Register a new task in 'PENDING' (or provided) status.
+
+        This does NOT start any background processing.
+        The caller is responsible for actually running indexing.
+        """
         task = TaskInfo(
             task_id=task_id,
             doc_id=doc_id,
             user_id=user_id,
-            content=content,
-            status=TaskStatus.PENDING,
+            content=None, 
+            status=status,
             created_at=datetime.now(),
         )
-        task.metadata = {
-            "filename": filename,
-            "file_type": file_type,
-            "file_size": file_size
-        }
-        self.tasks[task_id] = task
-        self.queue.append(task_id)
 
-        if not self.is_processing:
-            asyncio.create_task(self.process_queue())
+        # Optional metadata (filename, size, file_type, etc.)
+        task.metadata = metadata or {}
+        task.category_id = category_id
+        task.completed_at = None
+        task.error = None
+
+        self.tasks[task_id] = task
+        return task
+
+    # Lookups
+    # 
 
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
         return self.tasks.get(task_id)
 
-    async def process_queue(self):
-        async with self._lock:
-            if self.is_processing:
-                return
-            self.is_processing = True
+    # Status updates
 
-        try:
-            while self.queue:
-                batch_size = min(self._max_concurrent_tasks, len(self.queue))
-                batch = [self.queue.popleft() for _ in range(batch_size)]
-                await asyncio.gather(*(self._process_single_task(tid) for tid in batch))
-        finally:
-            self.is_processing = False
-
-    async def _process_single_task(self, task_id: str):
+    def mark_processing(self, task_id: str) -> None:
         task = self.tasks.get(task_id)
         if not task:
             return
-
-        agent = get_rag_agent()
         task.status = TaskStatus.PROCESSING
 
-        retries = 0
-        while retries < self._max_retries:
-            try:
-                await agent.index_document(
-                    document_id=task.doc_id,
-                    text=task.content,
-                    user_id=task.user_id,
-                    metadata=task.metadata,
-                )
+    def mark_completed(
+        self,
+        task_id: str,
+        category_id: Optional[str] = None,
+    ) -> None:
+        task = self.tasks.get(task_id)
+        if not task:
+            return
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = datetime.now()
+        if category_id is not None:
+            task.category_id = category_id
 
-                task.status = TaskStatus.COMPLETED
-                task.completed_at = datetime.now()
-                return
-            except Exception as e:
-                retries += 1
-                if retries >= self._max_retries:
-                    task.status = TaskStatus.FAILED
-                    task.error = str(e)
-                    return
-                await asyncio.sleep(self._retry_delay * retries)
+    def mark_failed(self, task_id: str, error: str) -> None:
+        task = self.tasks.get(task_id)
+        if not task:
+            return
+        task.status = TaskStatus.FAILED
+        task.error = error
+        task.completed_at = datetime.now()
 
-    def get_queue_size(self) -> int:
-        return len(self.queue)
+    # Stats
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Basic stats used by /health or any monitoring endpoints.
+        """
         return {
             "total_tasks": len(self.tasks),
-            "pending": sum(1 for t in self.tasks.values() if t.status == TaskStatus.PENDING),
-            "processing": sum(1 for t in self.tasks.values() if t.status == TaskStatus.PROCESSING),
-            "completed": sum(1 for t in self.tasks.values() if t.status == TaskStatus.COMPLETED),
-            "failed": sum(1 for t in self.tasks.values() if t.status == TaskStatus.FAILED),
-            "queue_size": len(self.queue),
-            "is_processing": self.is_processing,
+            "pending": sum(
+                1 for t in self.tasks.values() if t.status == TaskStatus.PENDING
+            ),
+            "processing": sum(
+                1 for t in self.tasks.values() if t.status == TaskStatus.PROCESSING
+            ),
+            "completed": sum(
+                1 for t in self.tasks.values() if t.status == TaskStatus.COMPLETED
+            ),
+            "failed": sum(
+                1 for t in self.tasks.values() if t.status == TaskStatus.FAILED
+            ),
+            # kept for backwards compatibility (no real queue anymore)
+            "queue_size": 0,
+            "is_processing": False,
         }
 
 
 _task_manager: Optional[TaskManager] = None
+
 
 def get_task_manager() -> TaskManager:
     global _task_manager

@@ -4,10 +4,13 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Form, HTTPException
 from pydantic import BaseModel
 
-from agents.rag_agent import RAGAgent, RAGResponse
+# ONLY ONE IMPORT PATH (absolute)
+from sortify.embedding.agents.rag_agent import get_rag_agent_sync, RAGResponse
 
 router = APIRouter(tags=["rag"])
-agent = RAGAgent()
+
+# Initialize singleton once
+agent = get_rag_agent_sync()
 
 
 class QuestionRequest(BaseModel):
@@ -52,7 +55,6 @@ async def ask_from_agent(
 
 @router.get("/health")
 async def health_check():
-    """Return basic health status."""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
