@@ -1,40 +1,41 @@
 from datetime import datetime
+from typing import Optional, List, Dict, Any
+
 from fastapi import APIRouter, Form, HTTPException
 from pydantic import BaseModel
+
 from agents.rag_agent import RAGAgent, RAGResponse
 
 router = APIRouter(tags=["rag"])
-
 agent = RAGAgent()
 
 
 class QuestionRequest(BaseModel):
     question: str
-    user_id: str | None = None
-    top_k: int | None = 5
+    user_id: Optional[str] = None
+    top_k: Optional[int] = 5
 
 
 class QuestionResponse(BaseModel):
     query: str
     answer: str
-    citations: list
+    citations: List[Any]
     retrieval_confidence: float
     strategy_used: str
     response_time_ms: float
-    metadata: dict
+    metadata: Dict[str, Any]
     timestamp: datetime
 
 
 @router.post("/ask", response_model=QuestionResponse)
 async def ask_from_agent(
     question: str = Form(...),
-    user_id: str = Form(...),
+    user_id: Optional[str] = Form(None),
     top_k: int = Form(5)
 ):
-    # Handle user query through RAG agent
+    """Handle user questions through the RAG agent."""
     try:
-        response: RAGResponse = await agent.query(question)
-
+        response: RAGResponse = await agent.query(question, top_k=top_k)
         return QuestionResponse(
             query=response.query,
             answer=response.answer,
@@ -45,14 +46,13 @@ async def ask_from_agent(
             metadata=response.metadata,
             timestamp=datetime.now(),
         )
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/health")
 async def health_check():
-    # Basic health check endpoint
+    """Return basic health status."""
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),

@@ -11,7 +11,7 @@ from core.chunking_service import ChunkingService
 from core.embedding_service import EmbeddingService
 from core.database_service import DatabaseService
 from config.settings import get_settings
-from utils.gemini_client import GeminiClient
+from sortify.embedding.utils.gemini_client import GeminiClient
 
 # Configure structured logging
 logging.basicConfig(

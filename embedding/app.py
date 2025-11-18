@@ -11,7 +11,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
 
 from config import get_settings
 from api import upload_router, rag_router, category_router

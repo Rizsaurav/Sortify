@@ -2,7 +2,7 @@ from datetime import datetime
 import io
 import uuid
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Query
-from agents.rag_agent import RAGAgent
+from sortify.embedding.agents.rag_agent import RAGAgent
 from models import DocumentUploadResponse, TaskStatusResponse, FileCategoryResponse
 from core import get_database_service
 from api.task_manager import get_task_manager
