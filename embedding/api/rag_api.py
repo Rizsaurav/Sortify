@@ -38,19 +38,40 @@ async def ask_from_agent(
 ):
     """Handle user questions through the RAG agent."""
     try:
-        response: RAGResponse = await agent.query(question, top_k=top_k)
+        # Pass user_id for data isolation - only search user's own documents
+        response: RAGResponse = await agent.query(question, top_k=top_k, user_id=user_id)
+
+        # Calculate confidence based on chunks retrieved vs used
+        confidence = 0.0
+        if response.chunks_retrieved > 0:
+            confidence = min(1.0, response.chunks_used / max(1, response.chunks_retrieved))
+
         return QuestionResponse(
-            query=response.query,
+            query=question,
             answer=response.answer,
             citations=response.citations,
-            retrieval_confidence=response.retrieval_confidence,
-            strategy_used=response.strategy_used,
+            retrieval_confidence=confidence,
+            strategy_used="agentic_rag",
             response_time_ms=response.processing_time_ms,
-            metadata=response.metadata,
+            metadata={
+                "chunks_used": response.chunks_used,
+                "chunks_retrieved": response.chunks_retrieved,
+                "user_id": user_id,
+            },
             timestamp=datetime.now(),
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ask_supabase", response_model=QuestionResponse)
+async def ask_supabase(
+    question: str = Form(...),
+    user_id: Optional[str] = Form(None),
+    top_k: int = Form(5)
+):
+    """Alias endpoint for frontend compatibility."""
+    return await ask_from_agent(question, user_id, top_k)
 
 
 @router.get("/health")
@@ -58,5 +79,5 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "agent_metrics": agent.get_metrics(),
+        "agent": "rag_agent_ready",
     }

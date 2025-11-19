@@ -333,7 +333,152 @@ class AsyncDatabaseService:
                 embedding=emb,
                 word_count=len(chunk.split()),
                 char_count=len(chunk),
+                user_id=user_id,
             )
+        return True
+
+    # ------------------------- RAG Search Methods -------------------------
+
+    async def search_similar_chunks(
+        self,
+        query_embedding: np.ndarray,
+        top_k: int = 5,
+        user_id: Optional[str] = None,
+        similarity_threshold: float = 0.0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for semantically similar chunks via cosine similarity.
+
+        Args:
+            query_embedding: The query vector (384-dim for Qwen)
+            top_k: Number of top results to return
+            user_id: Optional user ID to filter results (data isolation)
+            similarity_threshold: Minimum similarity score to include
+
+        Returns:
+            List of chunk dicts with 'content', 'similarity', 'document_id', etc.
+        """
+        # Build query params
+        params = {
+            "select": "id,document_id,content,embedding,chunk_index,word_count,user_id",
+        }
+
+        # Filter by user_id if provided
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+
+        # Fetch chunks with embeddings
+        rows = await self._request(
+            "GET",
+            "document_chunks",
+            params=params,
+        )
+
+        if not rows:
+            logger.info("No chunks found in database for similarity search")
+            return []
+
+        # Compute cosine similarities
+        results = []
+        for row in rows:
+            emb_data = row.get("embedding")
+            if not emb_data:
+                continue
+
+            chunk_emb = self.parse_embedding(emb_data)
+            if chunk_emb is None:
+                continue
+
+            # Cosine similarity calculation
+            dot_product = float(np.dot(query_embedding, chunk_emb))
+            norm_q = float(np.linalg.norm(query_embedding))
+            norm_c = float(np.linalg.norm(chunk_emb))
+
+            if norm_q * norm_c < 1e-8:
+                similarity = 0.0
+            else:
+                similarity = dot_product / (norm_q * norm_c)
+
+            if similarity >= similarity_threshold:
+                results.append({
+                    "id": row.get("id"),
+                    "document_id": row.get("document_id"),
+                    "content": row.get("content", ""),
+                    "similarity": similarity,
+                    "chunk_index": row.get("chunk_index"),
+                    "word_count": row.get("word_count"),
+                    "user_id": row.get("user_id"),
+                })
+
+        # Sort by similarity descending and return top k
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+
+        logger.info(
+            "Similarity search: found %d chunks, returning top %d (threshold=%.2f)",
+            len(results),
+            min(top_k, len(results)),
+            similarity_threshold,
+        )
+
+        return results[:top_k]
+
+    async def get_documents_for_chunks(
+        self,
+        doc_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch full document records for given document IDs.
+        Used to retrieve metadata for RAG citations.
+
+        Args:
+            doc_ids: List of document UUIDs
+
+        Returns:
+            List of document dicts with metadata, cluster_id, etc.
+        """
+        if not doc_ids:
+            return []
+
+        # Build filter for multiple IDs using PostgREST syntax
+        filter_str = ",".join(doc_ids)
+
+        rows = await self._request(
+            "GET",
+            "documents",
+            params={
+                "id": f"in.({filter_str})",
+                "select": "id,content,metadata,cluster_id,is_chunked,total_chunks,created_at",
+            },
+        )
+
+        return rows or []
+
+    async def delete_document_and_chunks(self, doc_id: str) -> bool:
+        """
+        Delete a document and all its associated chunks.
+        Ensures no orphaned chunks remain in database.
+
+        Args:
+            doc_id: The document UUID to delete
+
+        Returns:
+            True if successful
+        """
+        # Delete chunks first (foreign key reference)
+        await self._request(
+            "DELETE",
+            "document_chunks",
+            params={"document_id": f"eq.{doc_id}"},
+        )
+
+        # Delete the document
+        await self._request(
+            "DELETE",
+            "documents",
+            params={"id": f"eq.{doc_id}"},
+        )
+
+        logger.info("Deleted document %s and all associated chunks", doc_id)
         return True
 
 

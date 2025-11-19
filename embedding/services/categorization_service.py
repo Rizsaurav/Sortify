@@ -294,10 +294,13 @@ Respond ONLY with JSON in this exact format:
                 }
 
             # 4) Hard fallback → General Documents only
+            logger.info("Gemini categorization failed or low confidence, falling back to General Documents")
             general = next((c for c in categories if c.get("label") == "General Documents"), None)
             if not general:
+                logger.info("General Documents category not found, creating it...")
                 general = await async_retry(lambda: self.db.get_or_create_general_category(user_id))
 
+            logger.info(f"Assigning document {document_id} to General Documents (id={general['id']})")
             await async_retry(
                 lambda: self.db.update_document(document_id, cluster_id=general["id"])
             )

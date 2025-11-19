@@ -210,7 +210,7 @@ class RAGAgent:
     # ==================================================================
     # AGENTIC QUERY — heuristics, adaptive, Gemini once
     # ==================================================================
-    async def query(self, question: str, top_k: int = 5) -> RAGResponse:
+    async def query(self, question: str, top_k: int = 5, user_id: Optional[str] = None) -> RAGResponse:
         """
         Agentic RAG query:
 
@@ -221,6 +221,11 @@ class RAGAgent:
         - Filter + dedup chunks
         - Build context under a token budget
         - Single Gemini summarize() call
+
+        Args:
+            question: The user's question
+            top_k: Number of chunks to retrieve
+            user_id: Optional user ID for data isolation (only search user's docs)
         """
 
         start = time.time()
@@ -235,7 +240,7 @@ class RAGAgent:
             # ----------------------------------------------------------
             # PASS 1 — initial retrieval
             # ----------------------------------------------------------
-            chunks = await self.db.search_similar_chunks(q_emb, top_k)
+            chunks = await self.db.search_similar_chunks(q_emb, top_k, user_id=user_id)
             avg_sim, max_sim = self._similarity_stats(chunks)
 
             # ----------------------------------------------------------
@@ -249,7 +254,7 @@ class RAGAgent:
                     avg_sim,
                     max_sim,
                 )
-                expanded = await self.db.search_similar_chunks(q_emb, top_k * 2)
+                expanded = await self.db.search_similar_chunks(q_emb, top_k * 2, user_id=user_id)
                 if expanded:
                     chunks = expanded
                     avg_sim, max_sim = self._similarity_stats(chunks)
@@ -264,7 +269,7 @@ class RAGAgent:
                 )
                 refined_q = self._refine_question(question)
                 q_emb_refined = (await self.embedder.generate_embeddings([refined_q]))[0]
-                refined_chunks = await self.db.search_similar_chunks(q_emb_refined, top_k * 2)
+                refined_chunks = await self.db.search_similar_chunks(q_emb_refined, top_k * 2, user_id=user_id)
                 if refined_chunks:
                     chunks = refined_chunks
                     avg_sim, max_sim = self._similarity_stats(chunks)

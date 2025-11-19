@@ -54,6 +54,17 @@ async def upload_document(
         db = get_database_service()
         task_manager = get_task_manager()
 
+        # Auto-initialize standard categories for user on first upload
+        existing_categories = await db.get_categories_by_user(user_id)
+        if not existing_categories:
+            print(f"[UPLOAD] No categories found for user {user_id}, initializing standard categories...")
+            from services import get_categorization_service
+            cat_service = get_categorization_service()
+            created_ids = await cat_service.initialize_standard_categories(user_id)
+            print(f"[UPLOAD] Created {len(created_ids)} categories: {created_ids}")
+        else:
+            print(f"[UPLOAD] User {user_id} has {len(existing_categories)} existing categories")
+
         # Read + extract content
         file_bytes = await file.read()
         content = await _extract_content(file, file_bytes)

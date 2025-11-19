@@ -23,7 +23,7 @@ class RAGConfig:
     
     # Model Configuration
     embedding_model_name: str = "all-mpnet-base-v2"  # Default: all-mpnet-base-v2
-    llm_model_name: str = "models/gemini-flash-latest"  # Gemini API model (auto-detected)
+    llm_model_name: str = "gemini-1.5-flash"  # Gemini API model
     
     # Processing Configuration
     chunk_size: int = 512
@@ -55,7 +55,7 @@ class RAGConfig:
             qdrant_url=os.getenv("QDRANT_URL"),
             qdrant_api_key=os.getenv("QDRANT_API_KEY"),
             embedding_model_name=os.getenv("EMBEDDING_MODEL_NAME", "all-mpnet-base-v2"),
-            llm_model_name=os.getenv("LLM_MODEL_NAME", "models/gemini-flash-latest"),
+            llm_model_name=os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash"),
             chunk_size=int(os.getenv("CHUNK_SIZE", "512")),
             chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "50")),
             max_workers=int(os.getenv("MAX_WORKERS", "4")),

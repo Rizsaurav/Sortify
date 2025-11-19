@@ -115,10 +115,9 @@ class FastRAG:
         # Try available Gemini models (based on free tier API)
         # These are the models available as of 2025
         model_options = [
-            'models/gemini-flash-latest',      # Latest stable flash model
-            'models/gemini-2.5-flash',         # Gemini 2.5 flash
-            'models/gemini-2.0-flash',         # Gemini 2.0 flash
-            'models/gemini-pro-latest',        # Latest stable pro model
+            'gemini-1.5-flash',      # Latest stable flash model
+            'gemini-1.5-pro',        # Pro model
+            'gemini-1.0-pro',        # Fallback
         ]
         
         loaded = False
