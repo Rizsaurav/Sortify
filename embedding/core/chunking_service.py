@@ -1,6 +1,6 @@
 """
 Chunking service - Single responsibility: Split documents into semantic chunks.
-Handles all text chunking logic with sentence-aware splitting.
+Handles all text chunking logic with paragraph-aware and sentence-aware splitting.
 Uses token-based counting for accurate chunk sizing.
 Supports async operations and streaming for large documents.
 """
@@ -15,38 +15,64 @@ logger = get_logger(__name__)
 
 
 class ChunkingService:
+    """
+    Handles text chunking with semantic awareness and token-based counting.
+
+    Strategies:
+    - Paragraph-aware chunking (respects natural text boundaries)
+    - Sentence-based chunking with smart overlap
+    - Token-based counting for accurate sizing
+    - Adaptive refinement for optimal chunk quality
+    """
 
     def __init__(
         self,
         chunk_size: int = None,
         chunk_overlap: int = None,
         min_chunk_size: int = 50,
-        use_token_counting: bool = True
+        use_token_counting: bool = True,
+        respect_paragraphs: bool = True,
+        respect_headings: bool = True,
+        semantic_overlap: bool = True
     ):
         """
-        Initialize ChunkingService with token-based counting.
+        Initialize ChunkingService with token-based counting and semantic awareness.
 
         Args:
             chunk_size: Maximum tokens per chunk (default from settings)
             chunk_overlap: Number of tokens to overlap between chunks
             min_chunk_size: Minimum characters for a valid chunk
             use_token_counting: If True, use tokenizer for accurate counting
+            respect_paragraphs: Whether to respect paragraph boundaries
+            respect_headings: Whether to detect and preserve heading context
+            semantic_overlap: Whether to use semantic (paragraph-based) overlap
         """
         settings = get_settings()
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
         self.min_chunk_size = min_chunk_size
         self.use_token_counting = use_token_counting
+        self.respect_paragraphs = respect_paragraphs
+        self.respect_headings = respect_headings
+        self.semantic_overlap = semantic_overlap
 
         # Initialize tokenizer for accurate token counting
         self._tokenizer = None
         if use_token_counting:
             self._initialize_tokenizer()
 
+        # Compile regex patterns once for performance
+        self._paragraph_pattern = re.compile(r'\n\s*\n+')  # Double newlines = paragraph break
+        self._heading_pattern = re.compile(
+            r'^\s*(#{1,6}\s+.+|[A-Z][^\n]{0,100}:?\s*)$',
+            re.MULTILINE
+        )
+
         count_method = "token-based" if self._tokenizer else "word-based (estimated)"
         logger.info(
             f"ChunkingService initialized ({count_method}, size={self.chunk_size}, "
-            f"overlap={self.chunk_overlap})"
+            f"overlap={self.chunk_overlap}, paragraphs={respect_paragraphs}, "
+            f"headings={respect_headings})"
         )
 
     def _initialize_tokenizer(self) -> None:
@@ -99,13 +125,6 @@ class ChunkingService:
         # Fallback: estimate tokens from words
         # Research shows: 1 word ≈ 1.3 tokens for English text
         return int(len(text.split()) * 1.3)
-
-    def _word_count(self, text: str) -> int:
-        """
-        Legacy word count method. Prefer _count_tokens for accuracy.
-        Kept for backward compatibility.
-        """
-        return len(text.split())
 
     def preprocess_file_content(
         self,
@@ -182,8 +201,8 @@ class ChunkingService:
         return_metadata: bool = False
     ) -> List[str] | List[dict]:
         """
-        Split text into chunks using token-aware sentence splitting.
-        Synchronous version - for backward compatibility.
+        Split text into chunks using paragraph-aware and token-based splitting.
+        Combines semantic boundaries with accurate token counting.
 
         Args:
             text: Input text to chunk
@@ -209,9 +228,22 @@ class ChunkingService:
         # For very short texts, just return as single chunk
         if token_count < 20:
             logger.debug("Short text, returning as single chunk")
+            if return_metadata:
+                return self._add_chunk_metadata([text], text)
             return [text]
 
-        # Split into sentences
+        # Try paragraph chunking first if enabled and text has paragraphs
+        if self.respect_paragraphs and '\n\n' in text:
+            logger.debug("Using paragraph-aware chunking")
+            chunks = self._chunk_by_paragraphs(text)
+            if chunks:
+                refined_chunks = self._refine_chunks(chunks)
+                if return_metadata:
+                    return self._add_chunk_metadata(refined_chunks, text)
+                return refined_chunks
+
+        # Fall back to sentence chunking
+        logger.debug("Using sentence-based chunking")
         sentences = self._split_sentences(text)
 
         if not sentences:
@@ -248,196 +280,6 @@ class ChunkingService:
             return self._add_chunk_metadata(filtered_chunks, text)
 
         return filtered_chunks
-
-    async def chunk_text_async(
-        self,
-        text: str,
-        preprocess: bool = True,
-        return_metadata: bool = False
-    ) -> List[str] | List[dict]:
-        """
-        Async version of chunk_text for better integration with async systems.
-
-        Args:
-            text: Input text to chunk
-            preprocess: Whether to clean/normalize text first
-            return_metadata: If True, return list of dicts with chunk + metadata
-
-        Returns:
-            List of text chunks, or list of dicts if return_metadata=True
-        """
-        # Run the synchronous chunking in a thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            self.chunk_text,
-            text,
-            preprocess,
-            return_metadata
-        )
-
-    async def chunk_text_stream(
-        self,
-        text: str,
-        preprocess: bool = True,
-        return_metadata: bool = False,
-        batch_size: int = 10
-    ) -> AsyncGenerator[Dict | str, None]:
-        """
-        Stream chunks for large documents to reduce memory usage.
-        Yields chunks in batches for efficient processing.
-
-        Args:
-            text: Input text to chunk
-            preprocess: Whether to clean/normalize text first
-            return_metadata: If True, yield dicts with chunk + metadata
-            batch_size: Number of chunks to process before yielding
-
-        Yields:
-            Individual chunks (str or dict) or batches of chunks
-        """
-        if not text or not text.strip():
-            logger.warning("Empty text provided for chunking")
-            return
-
-        token_count = self._count_tokens(text)
-        logger.debug(f"Streaming chunks for text: {len(text)} chars, {token_count} tokens")
-
-        # Preprocess if requested
-        if preprocess:
-            text = TextProcessor.clean_text(text)
-            token_count = self._count_tokens(text)
-            logger.debug(f"After preprocessing: {len(text)} chars, {token_count} tokens")
-
-        # For very short texts, just yield as single chunk
-        if token_count < 20:
-            logger.debug("Short text, yielding as single chunk")
-            if return_metadata:
-                yield self._add_chunk_metadata([text], text)[0]
-            else:
-                yield text
-            return
-
-        # Split into sentences
-        sentences = self._split_sentences(text)
-
-        if not sentences:
-            logger.warning("No sentences found after splitting")
-            return
-
-        logger.debug(f"Split into {len(sentences)} sentences")
-
-        # Build and yield chunks incrementally
-        current_chunk = []
-        current_token_count = 0
-        chunk_index = 0
-        total_chunks_estimate = self.estimate_chunks(text)
-        min_tokens = max(5, self.min_chunk_size // 10)
-
-        for sentence in sentences:
-            sentence_tokens = self._count_tokens(sentence)
-
-            # Check if adding this sentence would exceed chunk size
-            if current_token_count + sentence_tokens > self.chunk_size and current_chunk:
-                # Yield current chunk
-                chunk_text = ' '.join(current_chunk)
-
-                # Only yield if chunk meets minimum size
-                if self._count_tokens(chunk_text) >= min_tokens:
-                    if return_metadata:
-                        chunk_meta = {
-                            'content': chunk_text,
-                            'chunk_index': chunk_index,
-                            'total_chunks': total_chunks_estimate,
-                            'token_count': float(self._count_tokens(chunk_text)),
-                            'word_count': float(self._word_count(chunk_text)),
-                            'char_count': len(chunk_text),
-                            'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
-                            'relative_position': chunk_index / max(total_chunks_estimate - 1, 1),
-                        }
-                        yield chunk_meta
-                    else:
-                        yield chunk_text
-
-                    chunk_index += 1
-
-                    # Allow async context switching every batch_size chunks
-                    if chunk_index % batch_size == 0:
-                        await asyncio.sleep(0)
-
-                # Get overlap sentences for continuity
-                overlap_sentences = self._get_overlap_sentences(
-                    current_chunk,
-                    self.chunk_overlap
-                )
-                current_chunk = overlap_sentences
-                current_token_count = sum(
-                    self._count_tokens(s) for s in current_chunk
-                )
-
-            current_chunk.append(sentence)
-            current_token_count += sentence_tokens
-
-        # Don't forget the last chunk
-        if current_chunk:
-            chunk_text = ' '.join(current_chunk)
-            if self._count_tokens(chunk_text) >= min_tokens:
-                if return_metadata:
-                    chunk_meta = {
-                        'content': chunk_text,
-                        'chunk_index': chunk_index,
-                        'total_chunks': chunk_index + 1,  # Actual total
-                        'token_count': float(self._count_tokens(chunk_text)),
-                        'word_count': float(self._word_count(chunk_text)),
-                        'char_count': len(chunk_text),
-                        'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
-                        'relative_position': 1.0,
-                    }
-                    yield chunk_meta
-                else:
-                    yield chunk_text
-
-        logger.debug(f"Finished streaming {chunk_index + 1} chunks")
-
-    def _add_chunk_metadata(
-        self,
-        chunks: List[str],
-        original_text: str
-    ) -> List[dict]:
-        """
-        Add metadata to chunks including position and structural info.
-
-        Args:
-            chunks: List of chunk texts
-            original_text: Original full text
-
-        Returns:
-            List of dicts with chunk content and metadata
-        """
-        chunks_with_metadata = []
-        char_position = 0
-
-        for idx, chunk in enumerate(chunks):
-            # Find approximate position in original text
-            chunk_start = original_text.find(chunk[:50]) if len(chunk) >= 50 else original_text.find(chunk)
-            if chunk_start == -1:
-                chunk_start = char_position
-
-            metadata = {
-                'content': chunk,
-                'chunk_index': idx,
-                'total_chunks': len(chunks),
-                'token_count': float(self._count_tokens(chunk)),  # Convert to float
-                'word_count': float(self._word_count(chunk)),  # Convert to float
-                'char_count': len(chunk),
-                'char_position': chunk_start,
-                'relative_position': idx / max(len(chunks) - 1, 1),  # 0.0 to 1.0
-            }
-
-            chunks_with_metadata.append(metadata)
-            char_position = chunk_start + len(chunk)
-
-        return chunks_with_metadata
     
     def _split_sentences(self, text: str) -> List[str]:
         """
@@ -606,6 +448,396 @@ class ChunkingService:
         """
         return len(text.split())
 
+    def _chunk_by_paragraphs(self, text: str) -> List[str]:
+        """
+        Chunk text by paragraphs using token-based sizing.
+        Respects natural paragraph boundaries while ensuring token limits.
+
+        Args:
+            text: Input text with paragraph breaks
+
+        Returns:
+            List of chunks respecting paragraph boundaries
+        """
+        paragraphs = self._paragraph_pattern.split(text)
+        paragraphs = [p.strip() for p in paragraphs if p.strip()]
+
+        if not paragraphs:
+            return []
+
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+
+        for para in paragraphs:
+            para_tokens = self._count_tokens(para)
+
+            # Handle really long paragraphs
+            if para_tokens > self.chunk_size:
+                if current_chunk:
+                    chunks.append('\n\n'.join(current_chunk))
+                    current_chunk = []
+                    current_token_count = 0
+
+                # Split the long paragraph into sentences
+                sub_chunks = self._split_large_paragraph(para)
+                chunks.extend(sub_chunks)
+                continue
+
+            # Check if we'd exceed chunk size
+            if current_token_count + para_tokens > self.chunk_size and current_chunk:
+                chunks.append('\n\n'.join(current_chunk))
+
+                # Keep some context from previous chunk
+                if self.chunk_overlap > 0:
+                    overlap_paras = self._get_overlap_paragraphs(current_chunk, self.chunk_overlap)
+                    current_chunk = overlap_paras
+                    current_token_count = sum(self._count_tokens(p) for p in current_chunk)
+                else:
+                    current_chunk = []
+                    current_token_count = 0
+
+            current_chunk.append(para)
+            current_token_count += para_tokens
+
+        if current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+
+        return chunks
+
+    def _get_overlap_paragraphs(self, paragraphs: List[str], overlap_tokens: int) -> List[str]:
+        """
+        Get last paragraphs that fit in overlap size (token-based).
+
+        Args:
+            paragraphs: List of paragraphs from previous chunk
+            overlap_tokens: Number of tokens to overlap
+
+        Returns:
+            List of paragraphs for overlap
+        """
+        if not paragraphs or overlap_tokens == 0:
+            return []
+
+        overlap_paras = []
+        token_count = 0
+
+        for para in reversed(paragraphs):
+            para_tokens = self._count_tokens(para)
+            if token_count + para_tokens <= overlap_tokens:
+                overlap_paras.insert(0, para)
+                token_count += para_tokens
+            else:
+                break
+
+        return overlap_paras
+
+    def _split_large_paragraph(self, paragraph: str) -> List[str]:
+        """
+        Split a paragraph that exceeds token limit into sentence-based chunks.
+
+        Args:
+            paragraph: Paragraph text that's too large
+
+        Returns:
+            List of smaller chunks
+        """
+        sentences = self._split_sentences(paragraph)
+
+        chunks = []
+        current_chunk = []
+        current_token_count = 0
+
+        for sentence in sentences:
+            sent_tokens = self._count_tokens(sentence)
+
+            if current_token_count + sent_tokens > self.chunk_size and current_chunk:
+                chunks.append(' '.join(current_chunk))
+                # Keep last sentence or two for context
+                overlap = current_chunk[-2:] if len(current_chunk) >= 2 else current_chunk[-1:]
+                current_chunk = overlap
+                current_token_count = sum(self._count_tokens(s) for s in current_chunk)
+
+            current_chunk.append(sentence)
+            current_token_count += sent_tokens
+
+        if current_chunk:
+            chunks.append(' '.join(current_chunk))
+
+        return chunks
+
+    def _refine_chunks(self, chunks: List[str]) -> List[str]:
+        """
+        Merge tiny chunks and filter out noise using token-based sizing.
+
+        Args:
+            chunks: List of initial chunks
+
+        Returns:
+            Refined list of chunks
+        """
+        if not chunks:
+            return []
+
+        refined = []
+        min_tokens = max(5, self.min_chunk_size // 10)
+
+        i = 0
+        while i < len(chunks):
+            chunk = chunks[i]
+            chunk_tokens = self._count_tokens(chunk)
+
+            # Try merging small chunks with next one
+            if chunk_tokens < min_tokens and i < len(chunks) - 1:
+                next_chunk = chunks[i + 1]
+                combined = f"{chunk}\n\n{next_chunk}"
+                combined_tokens = self._count_tokens(combined)
+
+                # Merge if it makes sense (within 20% of chunk size limit)
+                if combined_tokens <= self.chunk_size * 1.2:
+                    refined.append(combined)
+                    i += 2
+                    continue
+
+            refined.append(chunk)
+            i += 1
+
+        # Keep chunks that meet min size
+        filtered = [c for c in refined if self._count_tokens(c) >= min_tokens]
+        return filtered if filtered else refined
+    
+    def _add_chunk_metadata(
+        self,
+        chunks: List[str],
+        original_text: str
+    ) -> List[dict]:
+        """
+        Add metadata to chunks including position and structural info.
+
+        Args:
+            chunks: List of chunk texts
+            original_text: Original full text
+
+        Returns:
+            List of dicts with chunk content and metadata
+        """
+        chunks_with_metadata = []
+        char_position = 0
+
+        for idx, chunk in enumerate(chunks):
+            # Find approximate position in original text
+            chunk_start = original_text.find(chunk[:50]) if len(chunk) >= 50 else original_text.find(chunk)
+            if chunk_start == -1:
+                chunk_start = char_position
+
+            has_paras = '\n\n' in chunk
+            para_count = len(self._paragraph_pattern.split(chunk)) if has_paras else 1
+
+            metadata = {
+                'content': chunk,
+                'chunk_index': idx,
+                'total_chunks': len(chunks),
+                'token_count': float(self._count_tokens(chunk)),
+                'word_count': float(self._word_count(chunk)),
+                'char_count': len(chunk),
+                'char_position': chunk_start,
+                'relative_position': idx / max(len(chunks) - 1, 1),
+                'has_paragraphs': has_paras,
+                'paragraph_count': para_count
+            }
+
+            chunks_with_metadata.append(metadata)
+            char_position = chunk_start + len(chunk)
+
+        return chunks_with_metadata
+
+    async def chunk_text_async(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False
+    ) -> List[str] | List[dict]:
+        """
+        Async version of chunk_text for better integration with async systems.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, return list of dicts with chunk + metadata
+
+        Returns:
+            List of text chunks, or list of dicts if return_metadata=True
+        """
+        # Run the synchronous chunking in a thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self.chunk_text,
+            text,
+            preprocess,
+            return_metadata
+        )
+
+    async def chunk_text_stream(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False,
+        batch_size: int = 10
+    ) -> AsyncGenerator[Dict | str, None]:
+        """
+        Stream chunks for large documents to reduce memory usage.
+        Yields chunks in batches for efficient processing.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, yield dicts with chunk + metadata
+            batch_size: Number of chunks to process before yielding
+
+        Yields:
+            Individual chunks (str or dict) or batches of chunks
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided for chunking")
+            return
+
+        token_count = self._count_tokens(text)
+        logger.debug(f"Streaming chunks for text: {len(text)} chars, {token_count} tokens")
+
+        # Preprocess if requested
+        if preprocess:
+            text = TextProcessor.clean_text(text)
+            token_count = self._count_tokens(text)
+            logger.debug(f"After preprocessing: {len(text)} chars, {token_count} tokens")
+
+        # For very short texts, just yield as single chunk
+        if token_count < 20:
+            logger.debug("Short text, yielding as single chunk")
+            if return_metadata:
+                yield self._add_chunk_metadata([text], text)[0]
+            else:
+                yield text
+            return
+
+        # Try paragraph chunking first if enabled and text has paragraphs
+        if self.respect_paragraphs and '\n\n' in text:
+            chunks = self._chunk_by_paragraphs(text)
+            if chunks:
+                chunks = self._refine_chunks(chunks)
+        else:
+            # Fall back to sentence chunking
+            sentences = self._split_sentences(text)
+
+            if not sentences:
+                logger.warning("No sentences found after splitting")
+                return
+
+            # Build and yield chunks incrementally
+            current_chunk = []
+            current_token_count = 0
+            chunk_index = 0
+            total_chunks_estimate = self.estimate_chunks(text)
+            min_tokens = max(5, self.min_chunk_size // 10)
+
+            for sentence in sentences:
+                sentence_tokens = self._count_tokens(sentence)
+
+                # Check if adding this sentence would exceed chunk size
+                if current_token_count + sentence_tokens > self.chunk_size and current_chunk:
+                    # Yield current chunk
+                    chunk_text = ' '.join(current_chunk)
+
+                    # Only yield if chunk meets minimum size
+                    if self._count_tokens(chunk_text) >= min_tokens:
+                        if return_metadata:
+                            has_paras = '\n\n' in chunk_text
+                            chunk_meta = {
+                                'content': chunk_text,
+                                'chunk_index': chunk_index,
+                                'total_chunks': total_chunks_estimate,
+                                'token_count': float(self._count_tokens(chunk_text)),
+                                'word_count': float(self._word_count(chunk_text)),
+                                'char_count': len(chunk_text),
+                                'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
+                                'relative_position': chunk_index / max(total_chunks_estimate - 1, 1),
+                                'has_paragraphs': has_paras,
+                                'paragraph_count': len(self._paragraph_pattern.split(chunk_text)) if has_paras else 1
+                            }
+                            yield chunk_meta
+                        else:
+                            yield chunk_text
+
+                        chunk_index += 1
+
+                        # Allow async context switching every batch_size chunks
+                        if chunk_index % batch_size == 0:
+                            await asyncio.sleep(0)
+
+                    # Get overlap sentences for continuity
+                    overlap_sentences = self._get_overlap_sentences(
+                        current_chunk,
+                        self.chunk_overlap
+                    )
+                    current_chunk = overlap_sentences
+                    current_token_count = sum(
+                        self._count_tokens(s) for s in current_chunk
+                    )
+
+                current_chunk.append(sentence)
+                current_token_count += sentence_tokens
+
+            # Don't forget the last chunk
+            if current_chunk:
+                chunk_text = ' '.join(current_chunk)
+                if self._count_tokens(chunk_text) >= min_tokens:
+                    if return_metadata:
+                        has_paras = '\n\n' in chunk_text
+                        chunk_meta = {
+                            'content': chunk_text,
+                            'chunk_index': chunk_index,
+                            'total_chunks': chunk_index + 1,
+                            'token_count': float(self._count_tokens(chunk_text)),
+                            'word_count': float(self._word_count(chunk_text)),
+                            'char_count': len(chunk_text),
+                            'char_position': text.find(chunk_text[:50]) if len(chunk_text) >= 50 else text.find(chunk_text),
+                            'relative_position': 1.0,
+                            'has_paragraphs': has_paras,
+                            'paragraph_count': len(self._paragraph_pattern.split(chunk_text)) if has_paras else 1
+                        }
+                        yield chunk_meta
+                    else:
+                        yield chunk_text
+
+            logger.debug(f"Finished streaming {chunk_index + 1} chunks")
+            return
+
+        # For paragraph-based chunks, yield them
+        for idx, chunk in enumerate(chunks):
+            if return_metadata:
+                has_paras = '\n\n' in chunk
+                chunk_meta = {
+                    'content': chunk,
+                    'chunk_index': idx,
+                    'total_chunks': len(chunks),
+                    'token_count': float(self._count_tokens(chunk)),
+                    'word_count': float(self._word_count(chunk)),
+                    'char_count': len(chunk),
+                    'char_position': text.find(chunk[:50]) if len(chunk) >= 50 else text.find(chunk),
+                    'relative_position': idx / max(len(chunks) - 1, 1),
+                    'has_paragraphs': has_paras,
+                    'paragraph_count': len(self._paragraph_pattern.split(chunk)) if has_paras else 1
+                }
+                yield chunk_meta
+            else:
+                yield chunk
+
+            # Allow async context switching every batch_size chunks
+            if (idx + 1) % batch_size == 0:
+                await asyncio.sleep(0)
+
+        logger.debug(f"Finished streaming {len(chunks)} chunks")
+
     def get_chunk_metadata(
         self,
         chunk: str,
@@ -625,10 +857,15 @@ class ChunkingService:
         Returns:
             Dictionary with metadata
         """
+        has_paras = '\n\n' in chunk
+        para_count = len(self._paragraph_pattern.split(chunk)) if has_paras else 1
+
         metadata = {
             'token_count': self._count_tokens(chunk),
             'word_count': self._word_count(chunk),
-            'char_count': len(chunk)
+            'char_count': len(chunk),
+            'has_paragraphs': has_paras,
+            'paragraph_count': para_count
         }
 
         # Add optional positional metadata
@@ -645,7 +882,7 @@ class ChunkingService:
 
     def estimate_chunks(self, text: str) -> int:
         """
-        Estimate number of chunks for given text.
+        Estimate number of chunks for given text using token count.
 
         Args:
             text: Input text
