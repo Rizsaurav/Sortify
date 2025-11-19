@@ -36,17 +36,19 @@ export const FileGrid: React.FC<FileGridProps> = ({
 }) => {
   const [editingFile, setEditingFile] = useState<UploadedFile | null>(null);
   const [draggedFile, setDraggedFile] = useState<UploadedFile | null>(null);
-  const [hoveredFile, setHoveredFile] = useState<string | null>(null);
 
   const handleDragStart = (e: React.DragEvent, file: UploadedFile) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent parent handlers
     
+    // Don't allow dragging demo files
     if (file.id.startsWith('demo-')) {
       e.preventDefault();
       return;
     }
     
     setDraggedFile(file);
+    
+    // Use custom data format to distinguish from file uploads
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-file-card', JSON.stringify({
       fileId: file.id,
@@ -63,6 +65,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
   };
 
   const handleSaveCategory = (fileId: string, categoryId: number, categoryName: string) => {
+    // Check if it's a demo file
     if (fileId.startsWith('demo-')) {
       console.warn('Cannot change category for demo files');
       setEditingFile(null);
@@ -72,124 +75,102 @@ export const FileGrid: React.FC<FileGridProps> = ({
     onCategoryChange(fileId, categoryId, categoryName);
     setEditingFile(null);
   };
-
   if (viewMode === 'directory') {
+    // This would be handled by FileDirectory component
     return null;
   }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {files.map((file) => {
-        const isHovered = hoveredFile === file.id;
-        const isDragging = draggedFile?.id === file.id;
-        const isDemo = file.id.startsWith('demo-');
-        
-        return (
-          <div 
-            key={file.id} 
-            draggable={!isDemo}
-            onDragStart={(e) => handleDragStart(e, file)}
-            onDragEnd={handleDragEnd}
-            onMouseEnter={() => setHoveredFile(file.id)}
-            onMouseLeave={() => setHoveredFile(null)}
-            className={`
-              group bg-card rounded-2xl border border-border/50
-              transition-all duration-200
-              ${isDemo ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}
-              ${isDragging ? 'opacity-30 scale-95' : 'opacity-100'}
-              ${isHovered ? 'shadow-xl border-border/80 -translate-y-1' : 'shadow-sm hover:shadow-lg'}
-            `}
-          >
-            
-            <div className="relative z-10 p-5">
-              <div className="flex items-start justify-between mb-4">
-                <div 
-                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                  onClick={() => onPreviewFile(file)}
-                >
-                  <div className="w-11 h-11 bg-muted/50 rounded-2xl flex items-center justify-center flex-shrink-0 backdrop-blur-sm">
-                    {(() => {
-                      const { icon: Icon, className } = getFileIcon(file);
-                      return <Icon className={className} />;
-                    })()}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    {renamingFileId === file.id ? (
-                      <input
-                        type="text"
-                        value={newFileName}
-                        onChange={(e) => onFileNameChange(e.target.value)}
-                        onBlur={() => onConfirmRename(file.id)}
-                        onKeyPress={(e) => e.key === 'Enter' && onConfirmRename(file.id)}
-                        className="text-sm font-medium w-full bg-background px-2 py-1 rounded-lg border border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        autoFocus
-                      />
-                    ) : (
-                      <h4 className="text-sm font-medium truncate mb-1.5">
-                        {file.name}
-                      </h4>
-                    )}
-                    
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium text-white ${getCategoryColor(file.category)}`}>
+      {files.slice(0, 6).map((file) => (
+        <div 
+          key={file.id} 
+          draggable={!file.id.startsWith('demo-')}
+          onDragStart={(e) => handleDragStart(e, file)}
+          onDragEnd={handleDragEnd}
+          className={`
+            group bg-card rounded-xl border border-border hover:shadow-xl transition-all overflow-hidden
+            ${file.id.startsWith('demo-') ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}
+            ${draggedFile?.id === file.id ? 'opacity-30 scale-95' : 'opacity-100'}
+            hover:border-blue-300
+            transition-all duration-200
+          `}
+        >
+          <div className="p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3 flex-1 min-w-0" onClick={() => onPreviewFile(file)}>
+                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+                  {(() => {
+                    const { icon: Icon, className } = getFileIcon(file);
+                    return <Icon className={className} />;
+                  })()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  {renamingFileId === file.id ? (
+                    <input
+                      type="text"
+                      value={newFileName}
+                      onChange={(e) => onFileNameChange(e.target.value)}
+                      onBlur={() => onConfirmRename(file.id)}
+                      onKeyPress={(e) => e.key === 'Enter' && onConfirmRename(file.id)}
+                      className="text-sm font-medium w-full bg-background px-2 py-1 rounded"
+                      autoFocus
+                    />
+                  ) : (
+                    <h4 className="text-sm font-medium truncate">{file.name}</h4>
+                  )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white/90 bg-opacity-80 ${getCategoryColor(file.category)}`}>
                       {file.category}
                     </span>
                   </div>
                 </div>
-                
-                <div className={`flex items-center gap-1 transition-opacity duration-200 ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
-                  {!isDemo && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditCategory(file);
-                      }}
-                      className="p-2 rounded-full hover:bg-muted/80 transition-colors"
-                      title="Edit category"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  
-                  {file.storage_path && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDownloadFile(file.storage_path!, file.name);
-                      }}
-                      className="p-2 rounded-full hover:bg-muted/80 transition-colors"
-                      title="Download"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                  )}
-                  
+              </div>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                {!file.id.startsWith('demo-') && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteFile(file.id, file.name, file.storage_path);
+                      handleEditCategory(file);
                     }}
-                    className="p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 transition-colors"
-                    title="Delete"
+                    className="p-1.5 rounded-lg hover:bg-muted"
+                    title="Edit category"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
-                </div>
-              </div>
-              
-              <div 
-                className="aspect-video bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-2xl mb-4 cursor-pointer overflow-hidden"
-                onClick={() => onPreviewFile(file)}
-              />
-              
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{file.size}</span>
-                <span>{file.modified}</span>
+                )}
+                {file.storage_path && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDownloadFile(file.storage_path!, file.name);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-muted"
+                    title="Download"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteFile(file.id, file.name, file.storage_path);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-500"
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
-        );
-      })}
+          <div className="aspect-video bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 mx-4 rounded-lg mb-3"></div>
+          <div className="px-4 pb-4 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{file.size}</span>
+            <span>{file.modified}</span>
+          </div>
+        </div>
+      ))}
       
       {/* Edit Category Modal */}
       <EditCategoryModal
