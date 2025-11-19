@@ -82,8 +82,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {files.slice(0, 6).map((file) => (
-        <div 
+      {files.map((file) => (        <div 
           key={file.id} 
           draggable={!file.id.startsWith('demo-')}
           onDragStart={(e) => handleDragStart(e, file)}
