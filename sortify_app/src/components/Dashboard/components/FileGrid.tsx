@@ -131,7 +131,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
                       </h4>
                     )}
                     
-                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${getCategoryColor(file.category)}`}>
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium text-white ${getCategoryColor(file.category)}`}>
                       {file.category}
                     </span>
                   </div>
