@@ -561,31 +561,31 @@ export default function ChatbotPopup() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-2xl hover:shadow-3xl transition-all hover:scale-110 flex items-center justify-center z-50 group"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-2xl hover:shadow-3xl transition-all hover:scale-110 active:scale-95 flex items-center justify-center z-50 group touch-manipulation"
           aria-label="Open chat"
         >
-          <MessageCircle className="w-6 h-6" />
+          <MessageCircle className="w-6 h-6 sm:w-7 sm:h-7" />
           <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
         </button>
       )}
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 h-[600px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden">
+        <div className="fixed inset-4 sm:bottom-6 sm:right-6 sm:left-auto sm:top-auto sm:w-96 sm:max-w-[calc(100vw-2rem)] sm:h-[600px] h-[calc(100vh-2rem)] bg-card border border-border rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                <Sparkles className="w-5 h-5" />
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 sm:p-4 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <h3 className="font-semibold">Sortify Assistant</h3>
-                <p className="text-xs text-white/80">Always here to help</p>
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm sm:text-base truncate">Sortify Assistant</h3>
+                <p className="text-xs text-white/80 hidden sm:block">Always here to help</p>
               </div>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="hover:bg-white/20 p-2 rounded-lg transition-colors"
+              className="hover:bg-white/20 active:bg-white/30 p-2 rounded-lg transition-colors flex-shrink-0 touch-manipulation"
               aria-label="Close chat"
             >
               <X className="w-5 h-5" />
@@ -593,14 +593,14 @@ export default function ChatbotPopup() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/30">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-muted/30">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 py-2 sm:px-4 sm:py-3 ${
                     message.sender === 'user'
                       ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
                       : 'bg-card border border-border'
@@ -611,49 +611,49 @@ export default function ChatbotPopup() {
                       {message.files.map((file) => (
                         <div
                           key={file.id}
-                          className={`flex items-center gap-2 text-xs p-2 rounded-lg ${
+                          className={`flex items-center gap-2 text-xs p-1.5 sm:p-2 rounded-lg ${
                             message.sender === 'user'
                               ? 'bg-white/20'
                               : 'bg-muted'
                           }`}
                         >
                           <FileText className="w-3 h-3 flex-shrink-0" />
-                          <span className="flex-1 truncate">{file.name}</span>
-                          <span className="text-xs opacity-70">{formatFileSize(file.size)}</span>
+                          <span className="flex-1 truncate min-w-0">{file.name}</span>
+                          <span className="text-xs opacity-70 flex-shrink-0 hidden sm:inline">{formatFileSize(file.size)}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {message.text && (
-                    <p className="text-sm whitespace-pre-line">{message.text}</p>
+                    <p className="text-sm sm:text-base whitespace-pre-line break-words">{message.text}</p>
                   )}
                   
                   {/* Action Buttons - Show for bot messages with file uploads */}
                   {message.sender === 'bot' && message.showActions && message.fileContents && (
                     <div className="mt-3 pt-3 border-t border-border/50">
                       <p className="text-xs text-muted-foreground mb-2">What would you like to do?</p>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col sm:flex-row flex-wrap gap-2">
                         <button
                           onClick={() => handleActionClick('summary', message.id)}
                           disabled={isCreatingCategory === message.id}
-                          className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-xs bg-muted hover:bg-muted/80 active:bg-muted/70 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 touch-manipulation"
                         >
-                          <FileText className="w-3 h-3" />
+                          <FileText className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                           Just Summary
                         </button>
                         <button
                           onClick={() => handleActionClick('category', message.id)}
                           disabled={isCreatingCategory === message.id}
-                          className="px-3 py-1.5 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-xs bg-primary/10 hover:bg-primary/20 active:bg-primary/30 text-primary rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 touch-manipulation"
                         >
                           {isCreatingCategory === message.id ? (
                             <>
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3.5 h-3.5 sm:w-3 sm:h-3 animate-spin" />
                               Creating...
                             </>
                           ) : (
                             <>
-                              <FolderPlus className="w-3 h-3" />
+                              <FolderPlus className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                               Create Category
                             </>
                           )}
@@ -661,16 +661,16 @@ export default function ChatbotPopup() {
                         <button
                           onClick={() => handleActionClick('both', message.id)}
                           disabled={isCreatingCategory === message.id}
-                          className="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                          className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 touch-manipulation"
                         >
                           {isCreatingCategory === message.id ? (
                             <>
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3.5 h-3.5 sm:w-3 sm:h-3 animate-spin" />
                               Creating...
                             </>
                           ) : (
                             <>
-                              <Sparkles className="w-3 h-3" />
+                              <Sparkles className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                               Both
                             </>
                           )}
@@ -692,9 +692,9 @@ export default function ChatbotPopup() {
             
             {isTyping && (
               <div className="flex justify-start">
-                <div className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-2">
+                <div className="bg-card border border-border rounded-2xl px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Typing...</span>
+                  <span className="text-xs sm:text-sm text-muted-foreground">Typing...</span>
                 </div>
               </div>
             )}
@@ -702,8 +702,8 @@ export default function ChatbotPopup() {
           </div>
 
           {/* Quick Actions */}
-          <div className="px-4 py-2 border-t border-border bg-card/50">
-            <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="px-3 sm:px-4 py-2 border-t border-border bg-card/50 flex-shrink-0">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {['Upload help', 'Search tips', 'Organize files'].map((suggestion) => (
                 <button
                   key={suggestion}
@@ -711,7 +711,7 @@ export default function ChatbotPopup() {
                     setInputMessage(suggestion);
                     setTimeout(() => inputRef.current?.focus(), 0);
                   }}
-                  className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 rounded-full whitespace-nowrap transition-colors"
+                  className="px-4 py-2 sm:px-3 sm:py-1.5 text-xs bg-muted hover:bg-muted/80 active:bg-muted/70 rounded-full whitespace-nowrap transition-colors touch-manipulation flex-shrink-0"
                 >
                   {suggestion}
                 </button>
@@ -720,24 +720,24 @@ export default function ChatbotPopup() {
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t border-border bg-card">
+          <div className="p-3 sm:p-4 border-t border-border bg-card flex-shrink-0">
             {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachedFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs"
+                    className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 bg-muted rounded-lg text-xs"
                   >
-                    <FileText className="w-3 h-3 text-primary" />
-                    <span className="max-w-[150px] truncate">{file.name}</span>
-                    <span className="text-muted-foreground">{formatFileSize(file.size)}</span>
+                    <FileText className="w-3 h-3 text-primary flex-shrink-0" />
+                    <span className="max-w-[120px] sm:max-w-[150px] truncate min-w-0">{file.name}</span>
+                    <span className="text-muted-foreground hidden sm:inline flex-shrink-0">{formatFileSize(file.size)}</span>
                     <button
                       onClick={() => removeFile(file.id)}
-                      className="hover:bg-muted-foreground/20 rounded p-0.5 transition-colors"
+                      className="hover:bg-muted-foreground/20 active:bg-muted-foreground/30 rounded p-0.5 transition-colors flex-shrink-0 touch-manipulation"
                       aria-label="Remove file"
                     >
-                      <XCircle className="w-3 h-3" />
+                      <XCircle className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                     </button>
                   </div>
                 ))}
@@ -755,11 +755,11 @@ export default function ChatbotPopup() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-3 bg-muted hover:bg-muted/80 border border-border rounded-xl transition-colors flex items-center justify-center"
+                className="px-3 py-3 sm:px-3 sm:py-3 bg-muted hover:bg-muted/80 active:bg-muted/70 border border-border rounded-xl transition-colors flex items-center justify-center flex-shrink-0 touch-manipulation"
                 aria-label="Attach file"
                 title="Attach file"
               >
-                <Paperclip className="w-5 h-5 text-muted-foreground" />
+                <Paperclip className="w-5 h-5 sm:w-5 sm:h-5 text-muted-foreground" />
               </button>
               <input
                 ref={inputRef}
@@ -768,12 +768,12 @@ export default function ChatbotPopup() {
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-3 bg-muted border border-border rounded-xl outline-none focus:border-primary transition-colors text-sm"
+                className="flex-1 px-3 py-2.5 sm:px-4 sm:py-3 bg-muted border border-border rounded-xl outline-none focus:border-primary transition-colors text-sm sm:text-base min-w-0"
               />
               <button
                 onClick={handleSendMessage}
                 disabled={(!inputMessage.trim() && attachedFiles.length === 0) || isTyping || isUploading}
-                className="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 transition-all flex-shrink-0 touch-manipulation"
                 aria-label="Send message"
               >
                 {isUploading ? (
