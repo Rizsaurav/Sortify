@@ -9,6 +9,8 @@ export interface UploadedFile {
   modified: string;
   category: string;
   storage_path?: string;
+  file_path?: string;      // Added: from documents.file_path
+  file_url?: string;        // Added: from documents.file_url
   view_count?: number;
   metadata?: any;
   content?: string;

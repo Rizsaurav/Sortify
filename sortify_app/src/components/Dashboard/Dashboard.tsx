@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import ChatbotPopup from '../landing_page/ChatbotPopup';
 import FileDirectory from '../landing_page/FileDirectory';
 
-// Hooks
 import { useFileManagement } from './hooks/useFileManagement';
 import { useFilePreview } from './hooks/useFilePreview';
 import { useSearchAndFilter } from './hooks/useSearchAndFilter';
@@ -12,14 +11,12 @@ import { useDragAndDrop } from './hooks/useDragAndDrop';
 import { useUserProfile } from './hooks/useUserProfile';
 import { useCategoryManagement } from './hooks/useCategoryManagement';
 
-// Components
 import { FilePreviewModal } from './components/FilePreviewModal';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { FileGrid } from './components/FileGrid';
 import { NotificationContainer } from './components/NotificationToast';
 
-// Types
 import type { ViewMode } from './types';
 
 const DEMO_FILES = [
@@ -37,25 +34,10 @@ export default function Dashboard() {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false); //Track processing state
+  
+  const [isProcessing, setIsProcessing] = useState(false); 
+  const [isInitialLoading, setIsInitialLoading] = useState(true); 
 
-  // Prevent browser's default drag-and-drop file upload behavior
-  useEffect(() => {
-    const preventDefault = (e: DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    window.addEventListener('dragover', preventDefault);
-    window.addEventListener('drop', preventDefault);
-
-    return () => {
-      window.removeEventListener('dragover', preventDefault);
-      window.removeEventListener('drop', preventDefault);
-    };
-  }, []);
-
-  // Custom hooks
   const {
     uploadedFiles,
     totalFilesCount,
@@ -71,152 +53,122 @@ export default function Dashboard() {
     renameFile
   } = useFileManagement();
 
-  const {
-    previewState,
-    handlePreviewFile,
-    closePreview,
-    downloadFile
-  } = useFilePreview();
-
-  const {
-    searchQuery,
-    setSearchQuery,
-    selectedCategory,
-    filteredFiles,
-    handleCategoryFilter
-  } = useSearchAndFilter(uploadedFiles);
-
-  const {
-    isDragging,
-    fileInputRef,
-    handleFileInputChange,
-    triggerFileInput
-  } = useDragAndDrop(handleFileUpload);
-
-  const {
-    userProfile,
-    signOut
-  } = useUserProfile();
-
-  const {
-    categories,
-    changeFileCategory,
-    fetchCategories
-  } = useCategoryManagement(userProfile?.id || '');
-
-  // display files logic
-  const displayFiles = uploadedFiles.length === 0 ? DEMO_FILES : filteredFiles;
-  const hasRealFiles = uploadedFiles.length > 0;
-
-  // Debug effect to track state changes
+  // Fetches initial data on component mount with error handling.
   useEffect(() => {
-    console.log('📊 Dashboard State:', {
-      totalUploaded: uploadedFiles.length,
-      filtered: filteredFiles.length,
-      displaying: displayFiles.length,
-      activeCategory: selectedCategory,
-      hasRealFiles,
-      isProcessing
-    });
-  }, [uploadedFiles.length, filteredFiles.length, displayFiles.length, selectedCategory, hasRealFiles, isProcessing]);
+    const initDashboard = async () => {
+      try {
+        await fetchFiles();
+      } catch (error) {
+        console.error("Dashboard initialization failed:", error);
+        addNotification("Unable to retrieve files. Please refresh the page.", "error");
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
 
-  //Wrapper for category change with proper state management
+    initDashboard();
+  }, []); 
+
+  // Prevents default browser drag-and-drop interactions to enable custom drop zones.
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    window.addEventListener('dragover', preventDefault);
+    window.addEventListener('drop', preventDefault);
+
+    return () => {
+      window.removeEventListener('dragover', preventDefault);
+      window.removeEventListener('drop', preventDefault);
+    };
+  }, []);
+
+  const { previewState, handlePreviewFile, closePreview, downloadFile } = useFilePreview();
+  const { searchQuery, setSearchQuery, selectedCategory, filteredFiles, handleCategoryFilter } = useSearchAndFilter(uploadedFiles);
+  const { isDragging, fileInputRef, handleFileInputChange, triggerFileInput } = useDragAndDrop(handleFileUpload);
+  const { userProfile, signOut } = useUserProfile();
+  const { categories, changeFileCategory, fetchCategories } = useCategoryManagement(userProfile?.id || '');
+
+  const displayFiles = uploadedFiles.length === 0 ? DEMO_FILES : filteredFiles;
+
+  // Handles moving a file to a different category via the edit modal.
   const handleCategoryChange = async (fileId: string, categoryId: number, categoryName: string) => {
-    if (isProcessing) {
-      console.log('⏳ Already processing, please wait...');
+    if (isProcessing) return;
+    
+    if (fileId.startsWith('demo-')) {
+      addNotification('Modification of demo files is not permitted.', 'info');
       return;
     }
 
+    setIsProcessing(true);
     try {
-      console.log('🎯 Changing category via edit modal:', { fileId, categoryId, categoryName });
-      
-      if (fileId.startsWith('demo-')) {
-        addNotification('⚠️ Cannot change category for demo files', 'info');
-        return;
-      }
-      
-      setIsProcessing(true);
-      
       await changeFileCategory(fileId, categoryId, categoryName, async () => {
-        console.log('🔄 Refreshing files after category change...');
         await fetchFiles();
       });
-      
-      // Clear the filter to show all files including the moved one
-      handleCategoryFilter('');
-      
-      addNotification(`✅ File moved to ${categoryName}`, 'success');
-      
+      handleCategoryFilter(''); // Reset filter to ensure visibility of moved file.
+      addNotification(`File successfully moved to ${categoryName}.`, 'success');
     } catch (error) {
-      console.error('❌ Failed to change file category:', error);
-      addNotification('❌ Failed to move file. Please try again.', 'error');
+      console.error('Category update operation failed:', error);
+      addNotification('Failed to update file category. Please try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // FIXED: Handle drag and drop with proper state management
+  // Handles dropping a file onto a category sidebar item.
   const handleCategoryDrop = async (fileId: string, categoryId: number, categoryName: string) => {
-    if (isProcessing) {
-      console.log('⏳ Already processing, please wait...');
+    if (isProcessing) return;
+
+    if (fileId.startsWith('demo-')) {
+      addNotification('Modification of demo files is not permitted.', 'info');
       return;
     }
 
+    setIsProcessing(true);
     try {
-      console.log('🎯 Dropping file:', { fileId, categoryId, categoryName });
-      
-      if (fileId.startsWith('demo-')) {
-        addNotification('⚠️ Cannot change category for demo files', 'info');
-        return;
-      }
-      
-      setIsProcessing(true);
-      
       await changeFileCategory(fileId, categoryId, categoryName, async () => {
-        console.log('🔄 Refreshing files after drop...');
         await fetchFiles();
       });
-      
-      // FIXED: Clear filter so user can see the moved file
       handleCategoryFilter('');
-      
-      addNotification(`✅ File moved to ${categoryName}`, 'success');
-      
+      addNotification(`File successfully moved to ${categoryName}.`, 'success');
     } catch (error) {
-      console.error('❌ Failed to change file category:', error);
-      addNotification('❌ Failed to move file. Please try again.', 'error');
+      console.error('Category drop operation failed:', error);
+      addNotification('Failed to move file. Please try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // Handles file deletion with error feedback.
   const handleDeleteFile = async (fileId: string, fileName: string, storagePath?: string) => {
     try {
       await deleteFile(fileId, fileName, storagePath);
+      addNotification('File deleted successfully.', 'success');
     } catch (error) {
-      console.error('Delete error:', error);
+      console.error('Delete operation failed:', error);
+      addNotification('Unable to delete file. Please check your permissions.', 'error');
     }
   };
 
+  // Handles file renaming with error feedback.
   const handleRenameFile = async (fileId: string) => {
-    if (newFileName.trim()) {
-      try {
-        await renameFile(fileId, newFileName.trim());
-        setRenamingFileId(null);
-        setNewFileName('');
-      } catch (error) {
-        console.error('Rename error:', error);
-      }
+    if (!newFileName.trim()) return;
+
+    try {
+      await renameFile(fileId, newFileName.trim());
+      setRenamingFileId(null);
+      setNewFileName('');
+      addNotification('File renamed successfully.', 'success');
+    } catch (error) {
+      console.error('Rename operation failed:', error);
+      addNotification('Unable to rename file. Please try again later.', 'error');
     }
   };
 
-  const handleNavigateToAllFiles = () => {
-    navigate('/all-files');
-  };
-
-  const handleNavigateToProfile = () => {
-    navigate('/profile');
-  };
+  const handleNavigateToAllFiles = () => { navigate('/all-files'); };
+  const handleNavigateToProfile = () => { navigate('/profile'); };
 
   const formatStorageUsed = (bytes: number): string => {
     if (bytes === 0) return '0 MB';
@@ -224,23 +176,80 @@ export default function Dashboard() {
     return `${mb.toFixed(1)} MB`;
   };
 
+  // CSS animations for the loading state.
+  const globalStyles = `
+    @keyframes sortifyHeartbeat {
+      0% { transform: scale(1) translateY(9%); opacity: 0.9; }
+      50% { transform: scale(1.05) translateY(9%); opacity: 1; }
+      100% { transform: scale(1) translateY(9%); opacity: 0.9; }
+    }
+
+    @keyframes strokePulse {
+       0% { transform: scale(1); }
+       50% { transform: scale(1.03); }
+       100% { transform: scale(1); }
+    }
+    
+    @keyframes spin-linear {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    .animate-spin-linear {
+      animation: spin-linear 2s linear infinite;
+    }
+
+    :root {
+      --loading-stroke-gradient: conic-gradient(from 0deg, transparent 0%, transparent 15%, #00c6ff 30%, #0072ff 50%, #ff0080 75%, #ff0000 95%, transparent 100%);
+    }
+  `;
+
+  // Initial Loading State Render.
+  if (isInitialLoading) {
+    return (
+      <>
+        <style>{globalStyles}</style>
+        <div className={`min-h-screen flex flex-col items-center justify-center bg-background overflow-hidden ${darkMode ? 'dark' : ''}`}>
+          <div 
+            className="relative w-24 h-24 flex items-center justify-center"
+            style={{ animation: 'strokePulse 2s ease-in-out infinite' }}
+          >
+            <div 
+              className="absolute inset-0 rounded-full animate-spin-linear"
+              style={{ 
+                background: 'var(--loading-stroke-gradient)', 
+                zIndex: 0,
+                filter: 'drop-shadow(0 0 4px rgba(0, 114, 255, 0.5)) drop-shadow(0 0 8px rgba(255, 0, 128, 0.4))'
+              }}
+            ></div>
+            <div className="relative z-10 bg-background/95 backdrop-blur-sm w-full h-full rounded-full flex items-center justify-center overflow-hidden m-[3px] p-0.5 shadow-sm">
+              <img 
+                src="/logo.png" 
+                alt="Sortify" 
+                className="w-[250%] h-[250%] max-w-none object-center object-cover"
+                style={{ animation: 'sortifyHeartbeat 2s ease-in-out infinite' }}
+              />
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-background">
-        {/* Notifications */}
         <NotificationContainer 
           notifications={notifications}
           onRemove={removeNotification}
         />
 
-        {/* File Preview Modal */}
         <FilePreviewModal
           previewState={previewState}
           onClose={closePreview}
           onDownload={downloadFile}
         />
 
-        {/* Sidebar */}
         <Sidebar
           categoryCount={categoryCount}
           frequentFolders={frequentFolders}
@@ -254,7 +263,6 @@ export default function Dashboard() {
         />
 
         <div className="flex-1 lg:ml-64">
-          {/* Header */}
           <Header
             userProfile={userProfile}
             searchQuery={searchQuery}
@@ -264,29 +272,30 @@ export default function Dashboard() {
             onNavigateToProfile={handleNavigateToProfile}
           />
 
-          {/* Main Content */}
           <main 
             className="flex-1 p-4 lg:p-6 space-y-4 lg:space-y-6"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => e.preventDefault()}
           >
-            {/* FIXED: Processing Overlay */}
+            {/* Processing Overlay */}
             {isProcessing && (
-              <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm flex items-center justify-center">
-                <div className="bg-card border border-border rounded-xl p-6 text-center shadow-xl">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <p className="text-sm text-muted-foreground">Moving file...</p>
+              <div className="fixed inset-0 z-50 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+                <div className="bg-card border border-border rounded-2xl p-8 text-center shadow-2xl">
+                  <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-100 border-t-blue-600 mx-auto mb-4"></div>
+                  <p className="text-sm font-medium text-foreground">Updating...</p>
                 </div>
               </div>
             )}
 
             {/* Drag and Drop Overlay */}
             {isDragging && (
-              <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-                <div className="bg-card border-2 border-dashed border-blue-500 rounded-xl p-12 text-center">
-                  <CloudUpload className="w-16 h-16 text-blue-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold mb-2">Drop files here</h3>
-                  <p className="text-muted-foreground">Release to upload your files</p>
+              <div className="fixed inset-0 z-40 bg-background/80 backdrop-blur-md flex items-center justify-center transition-all duration-300">
+                <div className="bg-card border-2 border-dashed border-blue-500 rounded-2xl p-12 text-center shadow-xl transform scale-105">
+                  <div className="bg-blue-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <CloudUpload className="w-10 h-10 text-blue-500" />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-2 tracking-tight">Drop files here</h3>
+                  <p className="text-muted-foreground">Release to upload</p>
                 </div>
               </div>
             )}
@@ -299,42 +308,34 @@ export default function Dashboard() {
                   </h1>
                   <p className="text-muted-foreground text-sm lg:text-base mt-1">Your files are organized and ready to search</p>
                 </div>
-                <label className="w-full lg:w-auto px-6 lg:px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer">
+                <label className="w-full lg:w-auto px-6 lg:px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2 transition-all shadow-lg cursor-pointer hover:-translate-y-0.5">
                   <input ref={fileInputRef} type="file" onChange={handleFileInputChange} className="hidden" accept="*/*" multiple />
                   <Upload className="h-5 w-5" />
                   Upload Files
                 </label>
               </div>
 
-              {/* Search Bar with RAG */}
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              {/* Search Bar with AI Integration */}
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground group-focus-within:text-blue-500 transition-colors" />
                 <input
                   placeholder="Ask a question about your documents..."
-                  className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-primary outline-none transition-all shadow-sm"
+                  className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      // Handle RAG search
-                    }
-                  }}
                 />
                 <button 
-                  onClick={() => {
-                    // Handle RAG search
-                  }}
                   disabled={!searchQuery.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium disabled:opacity-50"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:shadow-none"
                 >
                   <Sparkles className="h-4 w-4" />
                   AI Search
                 </button>
               </div>
 
-              {/* FIXED: Filter tags with proper template literals */}
+              {/* Filters */}
               <div className="flex items-center gap-2 flex-wrap">
-                <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors">
+                <button className="px-4 py-2 rounded-lg border border-border hover:bg-accent flex items-center gap-2 transition-colors font-medium text-sm">
                   <Filter className="h-4 w-4" />
                   Filters
                 </button>
@@ -342,10 +343,10 @@ export default function Dashboard() {
                   <span 
                     key={tag} 
                     onClick={() => setActiveFilter(activeFilter === tag ? null : tag)}
-                    className={`px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-all font-medium ${
                       activeFilter === tag 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-secondary/50 hover:bg-secondary/80 text-muted-foreground backdrop-blur-sm'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+                        : 'bg-secondary/50 hover:bg-secondary text-muted-foreground'
                     }`}
                   >
                     {tag}
@@ -358,9 +359,9 @@ export default function Dashboard() {
               {/* Quick Access */}
               <div className="space-y-4 lg:space-y-6">
                 {/* Frequent Folders */}
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Folder className="w-5 h-5" />
+                    <Folder className="w-5 h-5 text-blue-500" />
                     Frequent Folders
                   </h3>
                   <div className="space-y-2">
@@ -368,22 +369,22 @@ export default function Dashboard() {
                       <button
                         key={folder.name}
                         onClick={() => handleCategoryFilter(folder.name)}
-                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors group"
                       >
                         <div className={`w-3 h-3 rounded-full ${folder.color}`} />
-                        <span className="text-sm">{folder.name}</span>
-                        <span className="text-xs text-muted-foreground ml-auto">{folder.count}</span>
+                        <span className="text-sm font-medium group-hover:text-blue-600 transition-colors">{folder.name}</span>
+                        <span className="text-xs text-muted-foreground ml-auto bg-muted px-2 py-0.5 rounded-full">{folder.count}</span>
                       </button>
                     )) : (
-                      <div className="text-sm text-muted-foreground">No folders yet</div>
+                      <div className="text-sm text-muted-foreground italic">No folders available</div>
                     )}
                   </div>
                 </div>
 
                 {/* Quick Actions */}
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5" />
+                    <Sparkles className="w-5 h-5 text-purple-500" />
                     Quick Actions
                   </h3>
                   <div className="space-y-2">
@@ -405,9 +406,9 @@ export default function Dashboard() {
                 </div>
 
                 {/* Analytics */}
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5" />
+                    <BarChart3 className="w-5 h-5 text-green-500" />
                     Analytics
                   </h3>
                   <div className="space-y-3">
@@ -430,14 +431,14 @@ export default function Dashboard() {
               {/* File Display */}
               <div className="lg:col-span-2">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-2xl font-bold">Your Files</h2>
-                  <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold tracking-tight">Your Files</h2>
+                  <div className="flex items-center p-1 bg-secondary rounded-lg border border-border">
                     <button 
                       onClick={() => setViewMode('directory')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
                         viewMode === 'directory' 
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' 
-                          : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'
+                          ? 'bg-background shadow text-foreground' 
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <Folder className="w-4 h-4" />
@@ -445,10 +446,10 @@ export default function Dashboard() {
                     </button>
                     <button 
                       onClick={() => setViewMode('grid')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
                         viewMode === 'grid' 
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg' 
-                          : 'bg-secondary hover:bg-secondary/80 text-muted-foreground'
+                          ? 'bg-background shadow text-foreground' 
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
                       <FileText className="w-4 h-4" />
@@ -457,10 +458,12 @@ export default function Dashboard() {
                   </div>
                 </div>
                 {displayFiles.length === 0 ? (
-                  <div className="bg-card rounded-xl border border-border p-12 text-center">
-                    <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+                  <div className="bg-card rounded-xl border border-border p-12 text-center shadow-sm">
+                    <div className="bg-muted/50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <FileText className="w-10 h-10 text-muted-foreground opacity-50" />
+                    </div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">No files to display</h3>
-                    <p className="text-sm text-muted-foreground mb-6">Upload your first file to get started with Sortify</p>
+                    <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">Upload your first file to get started with Sortify and organize your documents.</p>
                     <button 
                       onClick={triggerFileInput}
                       className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
@@ -503,10 +506,9 @@ export default function Dashboard() {
 
               {/* Recent Files Sidebar */}
               <div className="space-y-4 lg:space-y-6">
-                {/* Recently Uploaded */}
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
+                    <Clock className="w-5 h-5 text-orange-500" />
                     Recently Uploaded
                   </h3>
                   <div className="space-y-2">
@@ -516,7 +518,7 @@ export default function Dashboard() {
                         className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer" 
                         onClick={() => handlePreviewFile(file)}
                       >
-                        <div className="w-8 h-8 bg-muted rounded-lg flex items-center justify-center">
+                        <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg flex items-center justify-center">
                           <FileText className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
@@ -528,10 +530,9 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* Storage Used */}
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <CloudUpload className="w-5 h-5" />
+                    <CloudUpload className="w-5 h-5 text-indigo-500" />
                     Storage Used
                   </h3>
                   <div className="space-y-3">
@@ -539,24 +540,23 @@ export default function Dashboard() {
                       <span className="text-sm text-muted-foreground">Used</span>
                       <span className="text-sm font-medium">{formatStorageUsed(storageUsed)}</span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2">
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                       <div 
-                        className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all"
+                        className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-1000"
                         style={{ width: `${Math.min((storageUsed / (100 * 1024 * 1024)) * 100, 100)}%` }}
                       ></div>
                     </div>
-                    <p className="text-xs text-muted-foreground">100 MB limit</p>
+                    <p className="text-xs text-muted-foreground text-right">100 MB limit</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* ChatbotPopup */}
             <ChatbotPopup />
           </main>
         </div>
 
-        {/* Hidden file input */}
+        {/* Hidden input for handling file uploads. */}
         <input
           ref={fileInputRef}
           type="file"
