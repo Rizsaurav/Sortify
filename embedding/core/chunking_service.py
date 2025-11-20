@@ -7,7 +7,7 @@ Supports async operations and streaming for large documents.
 
 import re
 import asyncio
-from typing import List, Optional, AsyncGenerator, Dict
+from typing import List, Optional, AsyncGenerator, Dict, Any
 from utils import get_logger, TextProcessor
 from config import get_settings
 

@@ -22,7 +22,8 @@ class RAGConfig:
     qdrant_api_key: Optional[str] = None
     
     # Model Configuration
-    embedding_model_name: str = "all-mpnet-base-v2"  # Default: all-mpnet-base-v2
+    # BGE-M3: High-quality multilingual embeddings (1024 dims)
+    embedding_model_name: str = "BAAI/bge-m3"  # Upgraded from all-mpnet-base-v2 for better accuracy
     llm_model_name: str = "models/gemini-flash-latest"  # Gemini API model (auto-detected)
     
     # Processing Configuration
@@ -54,7 +55,7 @@ class RAGConfig:
             google_api_key=google_api_key,
             qdrant_url=os.getenv("QDRANT_URL"),
             qdrant_api_key=os.getenv("QDRANT_API_KEY"),
-            embedding_model_name=os.getenv("EMBEDDING_MODEL_NAME", "all-mpnet-base-v2"),
+            embedding_model_name=os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3"),
             llm_model_name=os.getenv("LLM_MODEL_NAME", "models/gemini-flash-latest"),
             chunk_size=int(os.getenv("CHUNK_SIZE", "512")),
             chunk_overlap=int(os.getenv("CHUNK_OVERLAP", "50")),

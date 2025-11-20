@@ -36,6 +36,10 @@ class TestEmbeddingService(unittest.TestCase):
         self.mock_model = Mock()
         self.mock_model.max_seq_length = 512
 
+        # Mock the initial dimension check (added for BGE-M3)
+        # Returns a 768-dim embedding to match config
+        self.mock_model.encode.return_value = np.zeros(768)
+
     @patch('core.embedding_service.get_model_config')
     @patch('core.embedding_service.SentenceTransformer')
     def test_initialization_default_config(self, mock_st, mock_get_config):
@@ -48,7 +52,7 @@ class TestEmbeddingService(unittest.TestCase):
         self.assertEqual(service.model_name, "test-model")
         self.assertEqual(service.device, "cpu")
         self.assertEqual(service.embedding_dim, 768)
-        mock_st.assert_called_once_with("test-model", device="cpu")
+        mock_st.assert_called_once_with("test-model", device="cpu", trust_remote_code=True)
 
     @patch('core.embedding_service.get_model_config')
     @patch('core.embedding_service.SentenceTransformer')
@@ -61,7 +65,7 @@ class TestEmbeddingService(unittest.TestCase):
 
         self.assertEqual(service.model_name, "custom-model")
         self.assertEqual(service.device, "cuda")
-        mock_st.assert_called_once_with("custom-model", device="cuda")
+        mock_st.assert_called_once_with("custom-model", device="cuda", trust_remote_code=True)
 
     @patch('core.embedding_service.get_model_config')
     @patch('core.embedding_service.SentenceTransformer')
@@ -84,16 +88,19 @@ class TestEmbeddingService(unittest.TestCase):
 
         # Mock encode to return a single embedding
         expected_embedding = np.array([0.1, 0.2, 0.3])
-        self.mock_model.encode.return_value = np.array([expected_embedding])
+        # First call is init dimension check, second is actual encode
+        self.mock_model.encode.side_effect = [
+            np.zeros(768),  # init check
+            np.array([expected_embedding])  # actual encode
+        ]
 
         service = EmbeddingService()
         result = service.encode("test text")
 
         # Should return single embedding (not wrapped in array)
         np.testing.assert_array_equal(result, expected_embedding)
-        self.mock_model.encode.assert_called_once()
 
-        # Verify call arguments
+        # Verify call arguments (last call)
         call_args = self.mock_model.encode.call_args
         self.assertEqual(call_args[0][0], ["test text"])
         self.assertEqual(call_args[1]['normalize_embeddings'], True)
@@ -143,14 +150,18 @@ class TestEmbeddingService(unittest.TestCase):
         mock_st.return_value = self.mock_model
 
         expected_embedding = np.array([0.1, 0.2])
-        self.mock_model.encode.return_value = np.array([expected_embedding])
+        # Mock needs to handle both the init check and the actual call
+        self.mock_model.encode.side_effect = [
+            np.zeros(768),  # init dimension check
+            np.array([expected_embedding])  # actual encode call
+        ]
 
         service = EmbeddingService()
         result = service.encode_query("search query")
 
-        # Verify query instruction was used
+        # Verify BGE-M3 query instruction was used
         call_args = self.mock_model.encode.call_args
-        self.assertEqual(call_args[0][0], ["query: search query"])
+        self.assertEqual(call_args[0][0], ["Represent this sentence for searching relevant passages: search query"])
 
     @patch('core.embedding_service.get_model_config')
     @patch('core.embedding_service.SentenceTransformer')

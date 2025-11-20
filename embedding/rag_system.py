@@ -104,10 +104,13 @@ class FastRAG:
     
     def _load_models(self):
         """Load embedding and LLM models."""
-        # Load embedding model
+        # Load embedding model (BGE-M3)
         logger.info(f"Loading embedding model: {self.config.embedding_model_name}")
-        self.embedding_model = SentenceTransformer(self.config.embedding_model_name)
-        logger.info(f"✓ Embedding model loaded successfully")
+        self.embedding_model = SentenceTransformer(
+            self.config.embedding_model_name,
+            trust_remote_code=True  # Required for BGE-M3
+        )
+        logger.info(f"✓ Embedding model loaded successfully (dim={self.embedding_model.get_sentence_embedding_dimension()})")
         
         # Configure Gemini API
         genai.configure(api_key=self.config.google_api_key)
