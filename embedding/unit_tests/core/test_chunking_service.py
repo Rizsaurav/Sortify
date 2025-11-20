@@ -27,8 +27,9 @@ class TestChunkingService(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.mock_settings = Mock()
-        self.mock_settings.chunk_size = 512
-        self.mock_settings.chunk_overlap = 77  # Updated to 15% overlap
+        self.mock_settings.chunk_size = 1000
+        self.mock_settings.chunk_overlap = 200  # Updated to 20% overlap
+        self.mock_settings.min_chunk_size_tokens = 50
 
     @patch('core.chunking_service.get_settings')
     @patch('core.chunking_service.get_model_config')
@@ -40,9 +41,10 @@ class TestChunkingService(unittest.TestCase):
 
         service = ChunkingService(use_token_counting=False)
 
-        self.assertEqual(service.chunk_size, 512)
-        self.assertEqual(service.chunk_overlap, 77)
+        self.assertEqual(service.chunk_size, 1000)
+        self.assertEqual(service.chunk_overlap, 200)
         self.assertEqual(service.min_chunk_size, 50)
+        self.assertEqual(service.min_chunk_size_tokens, 50)
 
     @patch('core.chunking_service.get_settings')
     def test_initialization_custom_params(self, mock_get_settings):

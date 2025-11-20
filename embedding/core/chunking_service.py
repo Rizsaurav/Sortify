@@ -30,10 +30,13 @@ class ChunkingService:
         chunk_size: int = None,
         chunk_overlap: int = None,
         min_chunk_size: int = 50,
+        min_chunk_size_tokens: int = None,
         use_token_counting: bool = True,
         respect_paragraphs: bool = True,
         respect_headings: bool = True,
-        semantic_overlap: bool = True
+        semantic_overlap: bool = True,
+        use_semantic_chunking: bool = None,
+        topic_shift_threshold: float = None
     ):
         """
         Initialize ChunkingService with token-based counting and semantic awareness.
@@ -41,20 +44,26 @@ class ChunkingService:
         Args:
             chunk_size: Maximum tokens per chunk (default from settings)
             chunk_overlap: Number of tokens to overlap between chunks
-            min_chunk_size: Minimum characters for a valid chunk
+            min_chunk_size: Minimum characters for a valid chunk (legacy)
+            min_chunk_size_tokens: Minimum tokens for a valid chunk (preferred)
             use_token_counting: If True, use tokenizer for accurate counting
             respect_paragraphs: Whether to respect paragraph boundaries
             respect_headings: Whether to detect and preserve heading context
             semantic_overlap: Whether to use semantic (paragraph-based) overlap
+            use_semantic_chunking: Enable semantic boundary detection (topic shifts)
+            topic_shift_threshold: Similarity threshold for topic shift detection (0.0-1.0)
         """
         settings = get_settings()
         self.chunk_size = chunk_size or settings.chunk_size
         self.chunk_overlap = chunk_overlap or settings.chunk_overlap
         self.min_chunk_size = min_chunk_size
+        self.min_chunk_size_tokens = min_chunk_size_tokens or settings.min_chunk_size_tokens
         self.use_token_counting = use_token_counting
         self.respect_paragraphs = respect_paragraphs
         self.respect_headings = respect_headings
         self.semantic_overlap = semantic_overlap
+        self.use_semantic_chunking = use_semantic_chunking if use_semantic_chunking is not None else settings.use_semantic_chunking
+        self.topic_shift_threshold = topic_shift_threshold or settings.topic_shift_threshold
 
         # Initialize tokenizer for accurate token counting
         self._tokenizer = None
@@ -69,9 +78,11 @@ class ChunkingService:
         )
 
         count_method = "token-based" if self._tokenizer else "word-based (estimated)"
+        chunking_mode = "semantic" if self.use_semantic_chunking else "standard"
         logger.info(
-            f"ChunkingService initialized ({count_method}, size={self.chunk_size}, "
-            f"overlap={self.chunk_overlap}, paragraphs={respect_paragraphs}, "
+            f"ChunkingService initialized ({chunking_mode}, {count_method}, "
+            f"size={self.chunk_size}, overlap={self.chunk_overlap}, "
+            f"min_tokens={self.min_chunk_size_tokens}, paragraphs={respect_paragraphs}, "
             f"headings={respect_headings})"
         )
 
@@ -204,6 +215,8 @@ class ChunkingService:
         Split text into chunks using paragraph-aware and token-based splitting.
         Combines semantic boundaries with accurate token counting.
 
+        If use_semantic_chunking is enabled, automatically uses semantic boundary detection.
+
         Args:
             text: Input text to chunk
             preprocess: Whether to clean/normalize text first
@@ -212,6 +225,15 @@ class ChunkingService:
         Returns:
             List of text chunks, or list of dicts if return_metadata=True
         """
+        # Automatically use semantic chunking if enabled
+        if self.use_semantic_chunking:
+            return self.chunk_text_semantic(
+                text,
+                preprocess=preprocess,
+                return_metadata=return_metadata,
+                topic_shift_threshold=self.topic_shift_threshold
+            )
+
         if not text or not text.strip():
             logger.warning("Empty text provided for chunking")
             return []
@@ -260,7 +282,7 @@ class ChunkingService:
             return []
 
         # Filter out very small chunks (token-based)
-        min_tokens = max(5, self.min_chunk_size // 10)
+        min_tokens = self.min_chunk_size_tokens
         filtered_chunks = [c for c in chunks if self._count_tokens(c) >= min_tokens]
 
         # If all chunks were filtered out, return the original chunks
@@ -580,7 +602,7 @@ class ChunkingService:
             return []
 
         refined = []
-        min_tokens = max(5, self.min_chunk_size // 10)
+        min_tokens = self.min_chunk_size_tokens
 
         i = 0
         while i < len(chunks):
@@ -738,7 +760,7 @@ class ChunkingService:
             current_token_count = 0
             chunk_index = 0
             total_chunks_estimate = self.estimate_chunks(text)
-            min_tokens = max(5, self.min_chunk_size // 10)
+            min_tokens = self.min_chunk_size_tokens
 
             for sentence in sentences:
                 sentence_tokens = self._count_tokens(sentence)
@@ -896,6 +918,432 @@ class ChunkingService:
 
         effective_chunk_size = self.chunk_size - self.chunk_overlap
         return max(1, (token_count + effective_chunk_size - 1) // effective_chunk_size)
+
+    def _detect_headings(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Detect headings and section boundaries in text.
+
+        Args:
+            text: Input text
+
+        Returns:
+            List of dicts with heading info: {text, position, level}
+        """
+        headings = []
+
+        for match in self._heading_pattern.finditer(text):
+            heading_text = match.group(0).strip()
+            position = match.start()
+
+            # Determine heading level
+            if heading_text.startswith('#'):
+                level = len(heading_text) - len(heading_text.lstrip('#'))
+            else:
+                # Assume top-level for text-style headings
+                level = 1
+
+            headings.append({
+                'text': heading_text,
+                'position': position,
+                'level': level
+            })
+
+        return headings
+
+    def _calculate_semantic_similarity(self, text1: str, text2: str) -> float:
+        """
+        Calculate semantic similarity between two text segments using embeddings.
+        Falls back to lexical similarity if embeddings unavailable.
+
+        Args:
+            text1: First text segment
+            text2: Second text segment
+
+        Returns:
+            Similarity score (0.0 to 1.0)
+        """
+        if not text1 or not text2:
+            return 0.0
+
+        # Try to use the embedding service if available
+        try:
+            from core.embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
+
+            # Get embeddings for both texts
+            emb1 = embedding_service.encode_texts([text1])[0]
+            emb2 = embedding_service.encode_texts([text2])[0]
+
+            # Cosine similarity
+            import numpy as np
+            similarity = float(np.dot(emb1, emb2) / (
+                np.linalg.norm(emb1) * np.linalg.norm(emb2) + 1e-8
+            ))
+
+            return max(0.0, min(1.0, similarity))
+
+        except Exception as e:
+            logger.debug(f"Embedding similarity failed, using lexical fallback: {e}")
+            # Fallback: Use Jaccard similarity on word sets
+            words1 = set(text1.lower().split())
+            words2 = set(text2.lower().split())
+
+            if not words1 or not words2:
+                return 0.0
+
+            intersection = len(words1 & words2)
+            union = len(words1 | words2)
+
+            return intersection / union if union > 0 else 0.0
+
+    def _detect_topic_shifts(
+        self,
+        paragraphs: List[str],
+        similarity_threshold: float = 0.5
+    ) -> List[int]:
+        """
+        Detect topic shift boundaries between paragraphs using semantic similarity.
+
+        Args:
+            paragraphs: List of paragraph texts
+            similarity_threshold: Threshold below which we consider a topic shift
+
+        Returns:
+            List of indices where topic shifts occur
+        """
+        if len(paragraphs) < 2:
+            return []
+
+        topic_boundaries = []
+
+        for i in range(len(paragraphs) - 1):
+            # Calculate similarity between consecutive paragraphs
+            similarity = self._calculate_semantic_similarity(
+                paragraphs[i],
+                paragraphs[i + 1]
+            )
+
+            # If similarity is low, mark as topic shift
+            if similarity < similarity_threshold:
+                topic_boundaries.append(i + 1)
+                logger.debug(
+                    f"Topic shift detected at paragraph {i + 1} "
+                    f"(similarity: {similarity:.2f})"
+                )
+
+        return topic_boundaries
+
+    def _calculate_chunk_coherence(self, chunk: str) -> float:
+        """
+        Calculate semantic coherence score for a chunk.
+        Higher scores indicate more cohesive content.
+
+        Args:
+            chunk: Text chunk
+
+        Returns:
+            Coherence score (0.0 to 1.0)
+        """
+        # Split into sentences
+        sentences = self._split_sentences(chunk)
+
+        if len(sentences) < 2:
+            return 1.0  # Single sentence is perfectly coherent
+
+        # Calculate average similarity between consecutive sentences
+        similarities = []
+        for i in range(len(sentences) - 1):
+            sim = self._calculate_semantic_similarity(sentences[i], sentences[i + 1])
+            similarities.append(sim)
+
+        if not similarities:
+            return 1.0
+
+        # Average similarity is our coherence score
+        coherence = sum(similarities) / len(similarities)
+
+        return coherence
+
+    def chunk_text_semantic(
+        self,
+        text: str,
+        preprocess: bool = True,
+        return_metadata: bool = False,
+        topic_shift_threshold: float = 0.5
+    ) -> List[str] | List[dict]:
+        """
+        Split text into chunks using semantic boundary detection.
+        Respects topic shifts, headings, and paragraph boundaries.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            return_metadata: If True, return list of dicts with chunk + metadata
+            topic_shift_threshold: Similarity threshold for detecting topic shifts
+
+        Returns:
+            List of text chunks, or list of dicts if return_metadata=True
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided for semantic chunking")
+            return []
+
+        logger.debug(f"Semantic chunking text: {len(text)} chars")
+
+        # Preprocess if requested
+        if preprocess:
+            text = TextProcessor.clean_text(text)
+
+        # For very short texts, just return as single chunk
+        token_count = self._count_tokens(text)
+        if token_count < 20:
+            logger.debug("Short text, returning as single chunk")
+            if return_metadata:
+                chunks = [text]
+                chunks_with_meta = self._add_chunk_metadata(chunks, text)
+                chunks_with_meta[0]['coherence_score'] = 1.0
+                return chunks_with_meta
+            return [text]
+
+        # Detect headings
+        headings = self._detect_headings(text) if self.respect_headings else []
+
+        # Split into paragraphs
+        if '\n\n' in text:
+            paragraphs = self._paragraph_pattern.split(text)
+            paragraphs = [p.strip() for p in paragraphs if p.strip()]
+        else:
+            # Fallback to sentences if no paragraphs
+            logger.debug("No paragraphs found, using sentence-based chunking")
+            return self.chunk_text(text, preprocess=False, return_metadata=return_metadata)
+
+        if not paragraphs:
+            return []
+
+        # Detect topic shifts
+        topic_boundaries = self._detect_topic_shifts(paragraphs, topic_shift_threshold)
+
+        # Build chunks respecting semantic boundaries
+        chunks = []
+        current_chunk_paras = []
+        current_token_count = 0
+
+        for i, para in enumerate(paragraphs):
+            para_tokens = self._count_tokens(para)
+
+            # Check if this paragraph is a topic boundary
+            is_topic_boundary = i in topic_boundaries
+
+            # Check if this paragraph starts with a heading
+            is_heading_boundary = False
+            if headings:
+                para_start_pos = text.find(para)
+                for heading in headings:
+                    if abs(heading['position'] - para_start_pos) < 50:
+                        is_heading_boundary = True
+                        break
+
+            # Decide whether to start a new chunk
+            should_split = (
+                # Normal size-based splitting
+                (current_token_count + para_tokens > self.chunk_size and current_chunk_paras) or
+                # Topic shift detected
+                (is_topic_boundary and current_chunk_paras) or
+                # Heading boundary
+                (is_heading_boundary and current_chunk_paras and current_token_count > self.chunk_size * 0.3)
+            )
+
+            if should_split:
+                # Save current chunk
+                chunk_text = '\n\n'.join(current_chunk_paras)
+                chunks.append(chunk_text)
+
+                # Start new chunk with overlap if not a strong boundary
+                if not (is_topic_boundary or is_heading_boundary) and self.chunk_overlap > 0:
+                    overlap_paras = self._get_overlap_paragraphs(current_chunk_paras, self.chunk_overlap)
+                    current_chunk_paras = overlap_paras
+                    current_token_count = sum(self._count_tokens(p) for p in current_chunk_paras)
+                else:
+                    # Strong semantic boundary - no overlap
+                    current_chunk_paras = []
+                    current_token_count = 0
+
+            # Handle very long paragraphs
+            if para_tokens > self.chunk_size:
+                if current_chunk_paras:
+                    chunks.append('\n\n'.join(current_chunk_paras))
+                    current_chunk_paras = []
+                    current_token_count = 0
+
+                # Split the long paragraph
+                sub_chunks = self._split_large_paragraph(para)
+                chunks.extend(sub_chunks)
+                continue
+
+            current_chunk_paras.append(para)
+            current_token_count += para_tokens
+
+        # Don't forget the last chunk
+        if current_chunk_paras:
+            chunks.append('\n\n'.join(current_chunk_paras))
+
+        # Filter out very small chunks
+        min_tokens = self.min_chunk_size_tokens
+        filtered_chunks = [c for c in chunks if self._count_tokens(c) >= min_tokens]
+
+        if not filtered_chunks:
+            filtered_chunks = chunks
+
+        logger.debug(
+            f"Created {len(filtered_chunks)} semantic chunks "
+            f"({len(topic_boundaries)} topic boundaries, {len(headings)} headings)"
+        )
+
+        # Add metadata if requested
+        if return_metadata:
+            chunks_with_meta = self._add_chunk_metadata(filtered_chunks, text)
+            # Add coherence scores
+            for chunk_meta in chunks_with_meta:
+                chunk_meta['coherence_score'] = self._calculate_chunk_coherence(
+                    chunk_meta['content']
+                )
+            return chunks_with_meta
+
+        return filtered_chunks
+
+    def chunk_text_hierarchical(
+        self,
+        text: str,
+        preprocess: bool = True,
+        parent_chunk_size: int = 2000,
+        child_chunk_size: int = 1000,
+        return_metadata: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Create hierarchical parent-child chunk structure.
+
+        Parent chunks are large sections/topics (~2000 tokens) that provide broader context.
+        Child chunks are smaller units (~1000 tokens) that enable precise retrieval.
+
+        Args:
+            text: Input text to chunk
+            preprocess: Whether to clean/normalize text first
+            parent_chunk_size: Maximum tokens for parent chunks
+            child_chunk_size: Maximum tokens for child chunks
+            return_metadata: Always True for hierarchical (needs relationships)
+
+        Returns:
+            Dict with:
+                - 'parent_chunks': List of parent chunks with metadata
+                - 'child_chunks': List of child chunks with parent references
+                - 'hierarchy': Mapping of parent_id -> [child_ids]
+        """
+        if not text or not text.strip():
+            logger.warning("Empty text provided for hierarchical chunking")
+            return {'parent_chunks': [], 'child_chunks': [], 'hierarchy': {}}
+
+        logger.debug(f"Hierarchical chunking text: {len(text)} chars")
+
+        # Preprocess if requested
+        if preprocess:
+            text = TextProcessor.clean_text(text)
+
+        # Step 1: Create parent chunks (large sections)
+        # Use semantic chunking with larger chunk size
+        original_chunk_size = self.chunk_size
+        original_overlap = self.chunk_overlap
+
+        # Temporarily adjust for parent chunks
+        self.chunk_size = parent_chunk_size
+        self.chunk_overlap = int(parent_chunk_size * 0.1)  # 10% overlap for parents
+
+        parent_chunks_raw = self.chunk_text_semantic(
+            text,
+            preprocess=False,  # Already preprocessed
+            return_metadata=True,
+            topic_shift_threshold=self.topic_shift_threshold
+        )
+
+        # Restore original settings
+        self.chunk_size = original_chunk_size
+        self.chunk_overlap = original_overlap
+
+        # Step 2: For each parent, create child chunks
+        parent_chunks = []
+        child_chunks = []
+        hierarchy = {}
+
+        for parent_idx, parent_meta in enumerate(parent_chunks_raw):
+            parent_id = f"parent_{parent_idx}"
+            parent_content = parent_meta['content']
+
+            # Add parent metadata
+            parent_chunk = {
+                'id': parent_id,
+                'content': parent_content,
+                'chunk_type': 'parent',
+                'chunk_index': parent_idx,
+                'token_count': parent_meta.get('token_count', 0),
+                'word_count': parent_meta.get('word_count', 0),
+                'char_count': parent_meta.get('char_count', 0),
+                'coherence_score': parent_meta.get('coherence_score', 0.0),
+                'child_count': 0  # Will update later
+            }
+
+            # Temporarily adjust for child chunks
+            self.chunk_size = child_chunk_size
+            self.chunk_overlap = int(child_chunk_size * 0.2)  # 20% overlap for children
+
+            # Create child chunks from this parent's content
+            children_raw = self.chunk_text_semantic(
+                parent_content,
+                preprocess=False,
+                return_metadata=True,
+                topic_shift_threshold=self.topic_shift_threshold
+            )
+
+            # Restore original settings
+            self.chunk_size = original_chunk_size
+            self.chunk_overlap = original_overlap
+
+            # Process child chunks
+            child_ids = []
+            for child_idx, child_meta in enumerate(children_raw):
+                child_id = f"{parent_id}_child_{child_idx}"
+
+                child_chunk = {
+                    'id': child_id,
+                    'content': child_meta['content'],
+                    'chunk_type': 'child',
+                    'parent_id': parent_id,
+                    'parent_content': parent_content,  # Store parent for context
+                    'chunk_index': child_idx,
+                    'global_chunk_index': len(child_chunks),
+                    'token_count': child_meta.get('token_count', 0),
+                    'word_count': child_meta.get('word_count', 0),
+                    'char_count': child_meta.get('char_count', 0),
+                    'coherence_score': child_meta.get('coherence_score', 0.0),
+                    'relative_position': child_meta.get('relative_position', 0.0)
+                }
+
+                child_chunks.append(child_chunk)
+                child_ids.append(child_id)
+
+            # Update parent with child count
+            parent_chunk['child_count'] = len(child_ids)
+            parent_chunks.append(parent_chunk)
+            hierarchy[parent_id] = child_ids
+
+        logger.info(
+            f"Created hierarchical structure: {len(parent_chunks)} parents, "
+            f"{len(child_chunks)} children (avg {len(child_chunks)/len(parent_chunks):.1f} children/parent)"
+        )
+
+        return {
+            'parent_chunks': parent_chunks,
+            'child_chunks': child_chunks,
+            'hierarchy': hierarchy
+        }
 
 _chunking_service = None
 

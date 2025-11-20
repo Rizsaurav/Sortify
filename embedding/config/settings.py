@@ -29,10 +29,22 @@ class Settings:
         self.rag_embedding_model = os.getenv('RAG_EMBEDDING_MODEL', 'all-mpnet-base-v2')
         
         # Chunking Configuration (token-based)
-        # chunk_size: Maximum tokens per chunk (aligns with model's 512-token limit)
-        # chunk_overlap: 15% overlap recommended by industry best practices (2025)
-        self.chunk_size = int(os.getenv('CHUNK_SIZE', '512'))
-        self.chunk_overlap = int(os.getenv('CHUNK_OVERLAP', '77'))  # 15% of chunk_size
+        # chunk_size: Maximum tokens per chunk (1000 tokens for better semantic coherence)
+        # chunk_overlap: 20% overlap for improved context continuity
+        # min_chunk_size_tokens: Minimum tokens for a valid chunk (prevents tiny chunks)
+        # use_semantic_chunking: Enable semantic boundary detection (topic shifts, headings)
+        # topic_shift_threshold: Similarity threshold for detecting topic changes (0.0-1.0)
+        # use_hierarchical_chunking: Enable parent-child chunk structure
+        # parent_chunk_size: Size for parent chunks (broader context)
+        # child_chunk_size: Size for child chunks (precise retrieval)
+        self.chunk_size = int(os.getenv('CHUNK_SIZE', '1000'))
+        self.chunk_overlap = int(os.getenv('CHUNK_OVERLAP', '200'))  # 20% of chunk_size
+        self.min_chunk_size_tokens = int(os.getenv('MIN_CHUNK_SIZE_TOKENS', '50'))
+        self.use_semantic_chunking = os.getenv('USE_SEMANTIC_CHUNKING', 'true').lower() == 'true'
+        self.topic_shift_threshold = float(os.getenv('TOPIC_SHIFT_THRESHOLD', '0.5'))
+        self.use_hierarchical_chunking = os.getenv('USE_HIERARCHICAL_CHUNKING', 'false').lower() == 'true'
+        self.parent_chunk_size = int(os.getenv('PARENT_CHUNK_SIZE', '2000'))
+        self.child_chunk_size = int(os.getenv('CHILD_CHUNK_SIZE', '1000'))
         
         # Categorization Configuration
         self.similarity_threshold = float(os.getenv('SIMILARITY_THRESHOLD', '0.45'))  # Lowered for better semantic matching
@@ -54,8 +66,8 @@ class Settings:
         ]
         
         # RAG Configuration
-        self.rag_top_k = int(os.getenv('RAG_TOP_K', '5'))
-        self.rag_similarity_threshold = float(os.getenv('RAG_SIMILARITY_THRESHOLD', '0.25'))
+        self.rag_top_k = int(os.getenv('RAG_TOP_K', '8'))
+        self.rag_similarity_threshold = float(os.getenv('RAG_SIMILARITY_THRESHOLD', '0.45'))
         
         # API Configuration
         self.api_version = os.getenv('API_VERSION', '1.0.0')

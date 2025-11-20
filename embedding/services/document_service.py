@@ -67,6 +67,17 @@ class DocumentService:
                 raise ValueError(f"Duplicate document: {duplicate_id}")
             
             # 2. Chunk the document with metadata
+            # Check if hierarchical chunking is enabled
+            from config import get_settings
+            settings = get_settings()
+
+            if settings.use_hierarchical_chunking:
+                # Use hierarchical chunking (parent-child structure)
+                return self._process_hierarchical(
+                    document_id, filename, content, user_id,
+                    file_type, file_size, content_hash
+                )
+
             chunks_with_metadata = self.chunking_service.chunk_text(
                 content,
                 preprocess=True,
@@ -165,7 +176,144 @@ class DocumentService:
             chunk.embedding = embedding
         
         logger.debug(f"✓ Generated {len(embeddings)} embeddings")
-    
+
+    def _process_hierarchical(
+        self,
+        document_id: str,
+        filename: str,
+        content: str,
+        user_id: str,
+        file_type: str,
+        file_size: int,
+        content_hash: str
+    ) -> ChunkedDocument:
+        """
+        Process document using hierarchical chunking (parent-child structure).
+
+        Args:
+            document_id: Document ID
+            filename: Original filename
+            content: Full document content
+            user_id: User ID
+            file_type: File MIME type
+            file_size: File size in bytes
+            content_hash: Content hash for duplicate detection
+
+        Returns:
+            ChunkedDocument object
+        """
+        from config import get_settings
+        settings = get_settings()
+
+        logger.info(f"Using hierarchical chunking for {filename}")
+
+        # Generate hierarchical chunks
+        hierarchical_data = self.chunking_service.chunk_text_hierarchical(
+            content,
+            preprocess=True,
+            parent_chunk_size=settings.parent_chunk_size,
+            child_chunk_size=settings.child_chunk_size
+        )
+
+        parent_chunks = hierarchical_data['parent_chunks']
+        child_chunks = hierarchical_data['child_chunks']
+        hierarchy = hierarchical_data['hierarchy']
+
+        if not child_chunks:
+            raise ValueError("No child chunks generated from document")
+
+        logger.info(
+            f"Generated {len(parent_chunks)} parent chunks, "
+            f"{len(child_chunks)} child chunks"
+        )
+
+        # Create Chunk objects for all chunks (both parent and child)
+        all_chunks = []
+
+        # Process child chunks (these are what we'll primarily retrieve)
+        for child_meta in child_chunks:
+            chunk = Chunk(
+                chunk_id=str(uuid.uuid4()),
+                document_id=document_id,
+                chunk_index=child_meta['global_chunk_index'],
+                content=child_meta['content'],
+                embedding=None,  # Will be set next
+                word_count=int(child_meta['word_count']),
+                char_count=child_meta['char_count'],
+                metadata={
+                    'filename': filename,
+                    'token_count': child_meta['token_count'],
+                    'chunk_type': 'child',
+                    'parent_id': child_meta['parent_id'],
+                    'parent_content': child_meta['parent_content'],  # Store parent for context
+                    'coherence_score': child_meta.get('coherence_score', 0.0),
+                    'relative_position': child_meta.get('relative_position', 0.0),
+                    'total_chunks': len(child_chunks)
+                }
+            )
+            all_chunks.append(chunk)
+
+        # Also store parent chunks (for potential future retrieval strategies)
+        for parent_meta in parent_chunks:
+            chunk = Chunk(
+                chunk_id=str(uuid.uuid4()),
+                document_id=document_id,
+                chunk_index=len(all_chunks),  # Append after children
+                content=parent_meta['content'],
+                embedding=None,
+                word_count=int(parent_meta['word_count']),
+                char_count=parent_meta['char_count'],
+                metadata={
+                    'filename': filename,
+                    'token_count': parent_meta['token_count'],
+                    'chunk_type': 'parent',
+                    'child_count': parent_meta['child_count'],
+                    'coherence_score': parent_meta.get('coherence_score', 0.0),
+                    'total_chunks': len(child_chunks)
+                }
+            )
+            all_chunks.append(chunk)
+
+        # Generate embeddings for all chunks
+        self._embed_chunks(all_chunks)
+
+        # Store chunks in database
+        for chunk in all_chunks:
+            token_count = chunk.metadata.get('token_count') if chunk.metadata else None
+            self.db_service.insert_chunk(
+                chunk_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
+                content=chunk.content,
+                embedding=chunk.embedding,
+                word_count=int(chunk.word_count),
+                char_count=chunk.char_count,
+                token_count=token_count,
+                user_id=user_id,
+                metadata=chunk.metadata
+            )
+
+        # Update parent document with metadata
+        self.db_service.update_document(
+            document_id,
+            content_hash=content_hash,
+            total_chunks=len(all_chunks),
+            is_chunked=True
+        )
+
+        logger.info(
+            f"✓ Stored {len(all_chunks)} hierarchical chunks "
+            f"({len(child_chunks)} children, {len(parent_chunks)} parents)"
+        )
+
+        return ChunkedDocument(
+            document_id=document_id,
+            filename=filename,
+            total_chunks=len(all_chunks),
+            content_hash=content_hash,
+            chunks=all_chunks
+        )
+
     def get_document_chunks(self, document_id: str) -> List[Chunk]:
         """
         Retrieve all chunks for a document.
