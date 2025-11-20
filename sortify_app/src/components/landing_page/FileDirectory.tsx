@@ -36,25 +36,31 @@ interface FileDirectoryProps {
   setNewFileName: (name: string) => void;
 }
 
-const getCategoryIcon = (category: string) => {
-  const categoryLower = category.toLowerCase();
-  if (categoryLower.includes('assignment')) return '📝';
-  if (categoryLower.includes('lecture')) return '📚';
-  if (categoryLower.includes('lab')) return '🧪';
-  if (categoryLower.includes('research')) return '🔬';
-  if (categoryLower.includes('study')) return '📖';
-  if (categoryLower.includes('computer') || categoryLower.includes('cs')) return '💻';
-  if (categoryLower.includes('math')) return '🔢';
-  if (categoryLower.includes('biology')) return '🧬';
-  if (categoryLower.includes('chemistry')) return '⚗️';
-  if (categoryLower.includes('physics')) return '⚛️';
-  if (categoryLower.includes('engineering')) return '⚙️';
-  if (categoryLower.includes('business')) return '💼';
-  return '📄';
+// --- Helper: Generate Image based on Category ---
+// Working properly
+const getCategoryImage = (category: string, width: number, height: number): string => {
+  const keywordMap: Record<string, string> = {
+    'Computer Science': 'coding,computer',
+    'Biology': 'biology,cell,microscope',
+    'Chemistry': 'chemistry,lab,science',
+    'Physics': 'physics,astronomy',
+    'Mathematics': 'math,geometry,numbers',
+    'Engineering': 'engineering,blueprint',
+    'Business': 'office,meeting',
+    'Assignments': 'writing,notebook,study',
+    'Lectures': 'classroom,blackboard',
+    'Research': 'library,books',
+    'General': 'desk,work'
+  };
+
+  let keywords = keywordMap[category];
+  if (!keywords) {
+    keywords = category.toLowerCase().replace(/\s+/g, ',');
+  }
+  return `https://loremflickr.com/${width}/${height}/${encodeURIComponent(keywords)}?lock=${category.length}`;
 };
 
 const getCategoryColor = (category: string): string => {
-  // Better color mapping for broader categories
   const colors: Record<string, string> = {
     'Academic Work': 'bg-gradient-to-r from-blue-500 to-blue-600',
     'Course Materials': 'bg-gradient-to-r from-green-500 to-green-600', 
@@ -67,7 +73,6 @@ const getCategoryColor = (category: string): string => {
     'Social Sciences': 'bg-gradient-to-r from-teal-500 to-teal-600',
     'Professional Documents': 'bg-gradient-to-r from-amber-500 to-amber-600',
     'General Documents': 'bg-gradient-to-r from-gray-500 to-gray-600',
-    // Fallback for old categories
     'Assignments': 'bg-blue-500',
     'Lecture Notes': 'bg-green-500',
     'Lab Reports': 'bg-purple-500',
@@ -146,15 +151,20 @@ export default function FileDirectory({
       {Object.entries(filesByCategory)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([category, categoryFiles]) => (
-          <div key={category} className="bg-card rounded-xl border border-border shadow-lg">
-            {/* Category Header - matches your existing card style */}
+          <div key={category} className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+            {/* Category Header */}
             <button
               onClick={() => toggleCategory(category)}
-              className="w-full flex items-center justify-between p-4 lg:p-6 hover:bg-muted/50 transition-colors rounded-xl"
+              className="w-full flex items-center justify-between p-4 lg:p-6 hover:bg-muted/50 transition-colors rounded-xl group relative overflow-hidden"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
-                  <span className="text-lg">{getCategoryIcon(category)}</span>
+              <div className="flex items-center gap-3 z-10">
+                {/* Category Image */}
+                <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center overflow-hidden border border-border shadow-sm">
+                   <img 
+                      src={getCategoryImage(category, 64, 64)} 
+                      alt={category}
+                      className="w-full h-full object-cover"
+                   />
                 </div>
                 <div className="flex-1 text-left">
                   <div className="font-medium text-lg">{category}</div>
@@ -163,7 +173,7 @@ export default function FileDirectory({
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 z-10">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium text-white/90 bg-opacity-80 ${getCategoryColor(category)}`}>
                   {categoryFiles.length}
                 </span>
@@ -175,7 +185,7 @@ export default function FileDirectory({
               </div>
             </button>
 
-            {/* Category Files - matches your existing file card style */}
+            {/* Category Files */}
             {expandedCategories.has(category) && (
               <div className="border-t border-border">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6">
@@ -250,7 +260,16 @@ export default function FileDirectory({
                             </div>
                           </div>
                         </div>
-                        <div className="aspect-video bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 mx-4 rounded-lg mb-3"></div>
+                        {/* Thumbnail Image */}
+                        <div className="aspect-video rounded-lg mb-3 mx-4 overflow-hidden relative group/image">
+                           <img 
+                              src={getCategoryImage(category, 400, 225)} 
+                              alt={category}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover/image:scale-110"
+                           />
+                           <div className={`absolute inset-0 opacity-20 mix-blend-overlay ${getCategoryColor(category)}`} />
+                        </div>
+
                         <div className="px-4 pb-4 flex items-center justify-between text-xs text-muted-foreground">
                           <span>{file.size}</span>
                           <span>{file.modified}</span>

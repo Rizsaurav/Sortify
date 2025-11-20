@@ -20,6 +20,32 @@ interface FileGridProps {
   onRefreshCategories?: () => void;
 }
 
+// --- Helper: Generate Image based on Category ---
+const getCategoryImage = (category: string, width: number, height: number): string => {
+  // Map categories to search terms
+  const keywordMap: Record<string, string> = {
+    'Computer Science': 'coding,computer',
+    'Biology': 'biology,cell,microscope',
+    'Chemistry': 'chemistry,lab,science',
+    'Physics': 'physics,astronomy',
+    'Mathematics': 'math,geometry,numbers',
+    'Engineering': 'engineering,blueprint',
+    'Business': 'office,meeting',
+    'Assignments': 'writing,notebook,study',
+    'Lectures': 'classroom,blackboard',
+    'Research': 'library,books',
+    'General': 'desk,work'
+  };
+
+  let keywords = keywordMap[category];
+  if (!keywords) {
+    keywords = category.toLowerCase().replace(/\s+/g, ',');
+  }
+
+  // Add a lock based on category length to keep images consistent per category
+  return `https://loremflickr.com/${width}/${height}/${encodeURIComponent(keywords)}?lock=${category.length}`;
+};
+
 export const FileGrid: React.FC<FileGridProps> = ({
   files,
   viewMode,
@@ -40,12 +66,10 @@ export const FileGrid: React.FC<FileGridProps> = ({
 
   const handleDragStart = (e: React.DragEvent, file: UploadedFile) => {
     e.stopPropagation();
-    
     if (file.id.startsWith('demo-')) {
       e.preventDefault();
       return;
     }
-    
     setDraggedFile(file);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('application/x-file-card', JSON.stringify({
@@ -68,7 +92,6 @@ export const FileGrid: React.FC<FileGridProps> = ({
       setEditingFile(null);
       return;
     }
-    
     onCategoryChange(fileId, categoryId, categoryName);
     setEditingFile(null);
   };
@@ -177,10 +200,19 @@ export const FileGrid: React.FC<FileGridProps> = ({
                 </div>
               </div>
               
+              {/* --- REPLACED: Image Thumbnail based on Category --- */}
               <div 
-                className="aspect-video bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 rounded-2xl mb-4 cursor-pointer overflow-hidden"
+                className="aspect-video rounded-2xl mb-4 cursor-pointer overflow-hidden relative group/image"
                 onClick={() => onPreviewFile(file)}
-              />
+              >
+                 <img 
+                    src={getCategoryImage(file.category, 400, 225)} 
+                    alt={file.category}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover/image:scale-110"
+                 />
+                 {/* Color overlay matching the category */}
+                 <div className={`absolute inset-0 opacity-20 mix-blend-overlay transition-opacity group-hover/image:opacity-10 ${getCategoryColor(file.category)}`} />
+              </div>
               
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{file.size}</span>
@@ -191,7 +223,6 @@ export const FileGrid: React.FC<FileGridProps> = ({
         );
       })}
       
-      {/* Edit Category Modal */}
       <EditCategoryModal
         file={editingFile}
         categories={categories}
