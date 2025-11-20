@@ -24,9 +24,12 @@ class Settings:
         self.google_api_key = self._get_required('GOOGLE_API_KEY')
         
         # Embedding Model Configuration
-        self.embedding_model = os.getenv('EMBEDDING_MODEL', 'Qwen/Qwen3-Embedding-0.6B')
+        # Using BGE-M3 for superior accuracy on academic content
+        # 1024-dimensional model with excellent multilingual support
+        self.embedding_model = os.getenv('EMBEDDING_MODEL', 'BAAI/bge-m3')
         self.embedding_dimension = int(os.getenv('EMBEDDING_DIMENSION', '1024'))
-        self.rag_embedding_model = os.getenv('RAG_EMBEDDING_MODEL', 'all-mpnet-base-v2')
+        # Unified model for both categorization and RAG (consistency)
+        self.rag_embedding_model = os.getenv('RAG_EMBEDDING_MODEL', 'BAAI/bge-m3')
         
         # Chunking Configuration (token-based)
         # chunk_size: Maximum tokens per chunk (1000 tokens for better semantic coherence)

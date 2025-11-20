@@ -1,6 +1,7 @@
 """
 Embedding service - Single responsibility: Generate embeddings from text.
 Handles all embedding model loading and inference.
+Optimized for BGE-M3 with support for instruction-based embeddings.
 """
 
 import numpy as np
@@ -14,23 +15,46 @@ logger = get_logger(__name__)
 
 
 class EmbeddingService:
-    
+    """
+    Embedding service using BGE-M3 for high-quality semantic embeddings.
+
+    BGE-M3 Features:
+    - 1024-dimensional embeddings
+    - Multilingual support (100+ languages)
+    - Optimized for academic and technical content
+    - Instruction-based query/passage encoding
+    """
+
     def __init__(
         self,
         model_name: Optional[str] = None,
         device: Optional[str] = None
     ):
         config = get_model_config()
-        
+
         self.model_name = model_name or config.embedding_model_name
         self.device = device or config.device
         self.embedding_dim = config.embedding_dim
-        
+
         logger.info(f"Loading embedding model: {self.model_name} on device: {self.device}")
-        
+
         try:
-            self.model = SentenceTransformer(self.model_name, device=self.device)
-            logger.info(f"✓ Embedding model loaded successfully")
+            # Load BGE-M3 with optimized settings
+            self.model = SentenceTransformer(
+                self.model_name,
+                device=self.device,
+                trust_remote_code=True  # Required for BGE-M3
+            )
+
+            # Verify embedding dimension matches expected
+            test_embedding = self.model.encode("test", convert_to_numpy=True)
+            actual_dim = test_embedding.shape[0] if test_embedding.ndim == 1 else test_embedding.shape[1]
+
+            if actual_dim != self.embedding_dim:
+                logger.warning(f"Model dimension ({actual_dim}) differs from config ({self.embedding_dim}). Updating config.")
+                self.embedding_dim = actual_dim
+
+            logger.info(f"✓ Embedding model loaded successfully (dim={self.embedding_dim})")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             raise
@@ -42,23 +66,37 @@ class EmbeddingService:
         show_progress: bool = False,
         normalize: bool = True,
         use_instruction: bool = False,
-        instruction_prompt: str = "query"
+        instruction_prompt: str = "Represent this document for retrieval"
     ) -> np.ndarray:
-        
+        """
+        Generate embeddings using BGE-M3.
+
+        Args:
+            texts: Single text or list of texts to embed
+            batch_size: Batch size for processing
+            show_progress: Show progress bar
+            normalize: Normalize embeddings to unit length
+            use_instruction: Prepend instruction for query encoding
+            instruction_prompt: Instruction to use (BGE-M3 specific)
+
+        Returns:
+            Embedding array (single vector or batch)
+        """
         try:
             # Handle single text
             is_single = isinstance(texts, str)
             if is_single:
                 texts = [texts]
-            
-            # Prepare prompt if needed
-            if use_instruction and hasattr(self.model, 'prompts'):
-                # Qwen3-Embedding supports instruction prompts
+
+            # BGE-M3 instruction format
+            # For queries: "Represent this sentence for searching relevant passages: {query}"
+            # For documents: raw text (no instruction)
+            if use_instruction:
                 processed_texts = [f"{instruction_prompt}: {text}" for text in texts]
             else:
                 processed_texts = texts
-            
-            # Generate embeddings
+
+            # Generate embeddings with BGE-M3
             embeddings = self.model.encode(
                 processed_texts,
                 batch_size=batch_size,
@@ -66,21 +104,36 @@ class EmbeddingService:
                 normalize_embeddings=normalize,
                 convert_to_numpy=True
             )
-            
+
             # Return single embedding if input was single text
             if is_single:
                 return embeddings[0]
-            
+
             return embeddings
-        
+
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise
     
     def encode_query(self, query: str) -> np.ndarray:
-        return self.encode(query, use_instruction=True, instruction_prompt="query")
-    
+        """
+        Encode a search query using BGE-M3 query instruction.
+
+        BGE-M3 uses different instructions for queries vs documents
+        to optimize retrieval performance.
+        """
+        return self.encode(
+            query,
+            use_instruction=True,
+            instruction_prompt="Represent this sentence for searching relevant passages"
+        )
+
     def encode_document(self, document: str) -> np.ndarray:
+        """
+        Encode a document using BGE-M3 (no instruction).
+
+        Documents are encoded without instructions in BGE-M3.
+        """
         return self.encode(document, use_instruction=False)
     
     def encode_batch(

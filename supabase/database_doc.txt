@@ -149,7 +149,10 @@ select * from smart_folders;
 
 ## Development Notes
 
-- **Embeddings(can be changed)**: 1536-d vectors (compatible with OpenAI text-embedding- ada-002).  
+- **Embeddings**: 1024-d vectors using BGE-M3 model for superior accuracy on academic content.
+  - Previous: 1536-d vectors (OpenAI text-embedding-ada-002)
+  - Current: 1024-d vectors (BAAI/bge-m3) - better quality, self-hosted
+  - Stored as JSONB arrays for flexibility (supports any dimension)
 
 - **Index**: HNSW index created on `documents.embedding` for fast similarity search.  
 
