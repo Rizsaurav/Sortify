@@ -82,9 +82,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex flex-col h-full">
         <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-              <Folder className="w-5 h-5 text-white" />
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="Sortify Logo" 
+              className="w-8 h-8 object-contain"
+            />
             <span className="text-xl font-bold text-sidebar-foreground">Sortify</span>
           </div>
         </div>
