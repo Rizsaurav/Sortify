@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import get_settings
+from settings import get_settings
 from api import upload_router, rag_router, category_router
 from utils import get_logger, LoggerFactory
 
@@ -47,6 +47,7 @@ logger.info("=" * 60)
 logger.info("Sortify API Application Starting")
 logger.info("=" * 60)
 
+_RECAT_DONE = False
 
 @app.on_event("startup")
 async def startup_event():
@@ -56,7 +57,7 @@ async def startup_event():
     try:
         # Eagerly initialize core services to catch errors early
         from core import get_embedding_service, get_database_service
-        from services import get_rag_service
+        from services import get_rag_service, get_categorization_service
         
         # Initialize embedding service
         embedding_service = get_embedding_service()
@@ -69,6 +70,26 @@ async def startup_event():
         # Initialize RAG
         rag_service = get_rag_service()
         logger.info("✓ RAG service ready")
+
+        # Initialize categorization service and recategorize documents
+        categorization_service = get_categorization_service()
+        recat_stats = categorization_service.recategorize_uncategorized_documents(limit=50)
+        logger.info(
+            f"✓ Categorization service ready (reprocessed "
+            f"{recat_stats['processed']} of {recat_stats['found']} uncategorized docs)"
+        )
+
+        global _RECAT_DONE
+        if settings.recategorize_on_start and (not settings.recategorize_once or not _RECAT_DONE):
+            all_stats = categorization_service.recategorize_documents(
+                limit=settings.recategorize_limit,
+                only_general=True
+            )
+            logger.info(
+                "✓ Recategorized existing documents "
+                f"(processed={all_stats['processed']}, skipped={all_stats['skipped']}, errors={all_stats['errors']})"
+            )
+            _RECAT_DONE = True
         
         logger.info("=" * 60)
         logger.info("All services initialized successfully!")
@@ -128,5 +149,3 @@ if __name__ == "__main__":
         reload=True,  # Enable auto-reload for development
         log_level="info"
     )
-
-

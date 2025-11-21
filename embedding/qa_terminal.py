@@ -376,10 +376,62 @@ class QATerminal:
         print(colored("\n👋 Thank you for using Sortify RAG! Happy studying! 📚", Colors.GREEN + Colors.BOLD))
         print()
 
+def run_terminal_interface(rag: FastRAG):
+    """
+    Run the terminal interface with a pre-initialized RAG system.
+
+    Args:
+        rag: Pre-initialized FastRAG instance
+    """
+    terminal = QATerminal()
+    terminal.rag = rag
+    terminal.config = rag.config
+
+    # Print header
+    terminal.print_header()
+
+    # Show document list
+    print(colored("\n📚 System ready!", Colors.GREEN))
+    terminal._show_document_list()
+
+    # Show help
+    print(colored("\n💡 Type 'help' for commands or just ask a question!", Colors.YELLOW))
+
+    # Main loop
+    print()
+    while True:
+        try:
+            # Get user input
+            prompt = colored("\n🎓 You: ", Colors.BOLD + Colors.CYAN)
+            user_input = input(prompt).strip()
+
+            # Handle command
+            if not terminal.handle_command(user_input):
+                break
+
+        except KeyboardInterrupt:
+            print(colored("\n\n⚠️  Interrupted by user", Colors.YELLOW))
+            break
+        except EOFError:
+            print(colored("\n\n👋 Goodbye!", Colors.BLUE))
+            break
+        except Exception as e:
+            print(colored(f"\n❌ Unexpected error: {e}", Colors.RED))
+            import traceback
+            traceback.print_exc()
+
+    # Show final statistics
+    if terminal.question_count > 0:
+        print()
+        terminal.show_statistics()
+
+    print(colored("\n👋 Thank you for using Sortify RAG! Happy studying! 📚", Colors.GREEN + Colors.BOLD))
+    print()
+
 def main():
     """Main entry point."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="Sortify RAG Terminal Q&A Interface",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -390,14 +442,14 @@ Examples:
   python qa_terminal.py --search "ML"      # Search documents
         """
     )
-    
+
     parser.add_argument('question', nargs='?', help='Ask a single question')
     parser.add_argument('--search', metavar='QUERY', help='Search documents')
-    
+
     args = parser.parse_args()
-    
+
     terminal = QATerminal()
-    
+
     # Single question mode
     if args.question:
         terminal.print_header()

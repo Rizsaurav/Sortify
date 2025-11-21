@@ -10,8 +10,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from models import Category
 from core.embedding_service import get_embedding_service
 from core.database_service import get_database_service
-from utils import get_logger, TextProcessor
-from config import get_settings
+from utils import get_logger, TextProcessor, get_categorization_debugger
+from settings import get_settings
 
 logger = get_logger(__name__)
 
@@ -70,6 +70,12 @@ class CategorizationService:
             'anthropology', 'geography', 'social', 'cultural', 'behavioral',
             'human', 'society', 'community'
         ],
+        'Professional Documents': [
+            'resume', 'cv', 'cover letter', 'application', 'job', 'position',
+            'hiring', 'employment', 'career', 'experience', 'skills', 'qualification',
+            'professional', 'portfolio', 'linkedin', 'references', 'objective',
+            'summary', 'education', 'work history', 'candidate'
+        ],
     }
     
     # Subject keywords
@@ -110,10 +116,13 @@ class CategorizationService:
         
         self.embedding_service = get_embedding_service()
         self.db_service = get_database_service()
+        self.debugger = get_categorization_debugger()
         
         logger.info(
             f"CategorizationService initialized "
-            f"(threshold={self.similarity_threshold}, max={self.max_categories})"
+            f"(threshold={self.similarity_threshold}, "
+            f"max={self.max_categories}, "
+            f"debug={self.debugger.enabled})"
         )
     
     def initialize_standard_categories(self, user_id: str) -> List[int]:
@@ -201,76 +210,166 @@ class CategorizationService:
         user_id: str,
         aggregated_embedding: np.ndarray,
         content: str,
-        filename: str
+        filename: str,
+        chunk_count: int = 0
     ) -> Dict[str, Any]:
         """
         Enhanced hybrid categorization with multi-pass analysis and confidence scoring.
-        
+
         Args:
             document_id: Document ID
             user_id: User ID
             aggregated_embedding: Document embedding
             content: Document content (for keyword extraction)
             filename: Document filename (for keyword hints)
-        
+            chunk_count: Number of chunks aggregated (for debugging)
+
         Returns:
             Categorization result with confidence scoring
         """
         try:
             logger.info(f"Hybrid categorizing document {document_id}")
-            
+            # Normalize/clean embedding input defensively
+            aggregated_embedding = np.array(aggregated_embedding, dtype=np.float32).reshape(-1)
+            if aggregated_embedding.size == 0:
+                raise ValueError("Empty embedding received for categorization")
+
+            embedding_norm = float(np.linalg.norm(aggregated_embedding))
+            if embedding_norm > 0:
+                aggregated_embedding = aggregated_embedding / (embedding_norm + 1e-8)
+
+            self.debugger.start_categorization(document_id, filename)
+            self.debugger.log_embedding_info(
+                embedding_dim=len(aggregated_embedding),
+                embedding_norm=embedding_norm,
+                num_chunks=chunk_count,
+                sample=aggregated_embedding.tolist()[:10]
+            )
+
             # Get existing categories
             existing_categories = self.db_service.get_categories_by_user(user_id)
-            
+
             if not existing_categories:
-                # Create a general category if none exist
-                general_cat_id = self.db_service.get_or_create_general_category(user_id)
-                if general_cat_id:
-                    # Update document
-                    self.db_service.update_document(document_id, cluster_id=general_cat_id)
-                    
-                    return {
-                        'success': True,
-                        'category_id': general_cat_id,
-                        'category_name': 'General Documents',
-                        'is_new': True,
-                        'similarity': 1.0,
-                        'keyword_match': False,
-                        'default': True
-                    }
+                # Initialize standard categories for new user
+                logger.info(f"No categories found for user {user_id}, initializing standard categories")
+                self.initialize_standard_categories(user_id)
+
+                # Reload categories after initialization
+                existing_categories = self.db_service.get_categories_by_user(user_id)
+
+                if not existing_categories:
+                    # Fallback: Create a general category if initialization failed
+                    logger.warning("Standard category initialization failed, creating General Documents")
+                    general_cat_id = self.db_service.get_or_create_general_category(user_id)
+                    if general_cat_id:
+                        # Update document
+                        self.db_service.update_document(document_id, cluster_id=general_cat_id)
+
+                        reason = "No categories available; created General Documents fallback"
+                        self.debugger.log_decision(
+                            decision="fallback_general",
+                            reason=reason,
+                            category='General Documents',
+                            similarity=1.0
+                        )
+                        self.debugger.log_final_result({
+                            'category_id': general_cat_id,
+                            'category_name': 'General Documents',
+                            'method': 'fallback_initialize',
+                            'chunks_processed': chunk_count
+                        })
+                        self.debugger.end_categorization()
+
+                        return {
+                            'success': True,
+                            'category_id': general_cat_id,
+                            'category_name': 'General Documents',
+                            'is_new': True,
+                            'similarity': 1.0,
+                            'keyword_match': False,
+                            'default': True
+                        }
             
-            # Simple keyword analysis
+            # Enhanced keyword analysis
             suggested_categories = self._analyze_keywords(content, filename)
             logger.info(f"Keyword suggestions: {suggested_categories}")
-            
-            # Find best semantic match
-            best_match = None
-            best_similarity = 0.0
-            
+            keyword_scores = self._get_keyword_scores(content, filename)
+            self.debugger.log_keyword_analysis(
+                suggested_categories=suggested_categories,
+                keyword_scores=keyword_scores,
+                filename=filename,
+                content_preview=content[:500]
+            )
+
+            # Find best semantic matches (including zero-centroid categories for keyword matching)
+            semantic_matches = []
+
             for category in existing_categories:
-                if category.get('centroid'):
-                    try:
-                        # Convert centroid to numpy array
-                        centroid_array = np.array(category['centroid'], dtype=np.float32)
-                        
-                        # Calculate cosine similarity
+                centroid_array = self.db_service.parse_embedding(category.get('centroid'))
+                if centroid_array is None:
+                    logger.warning(f"Skipping category {category.get('id')} due to unparsable centroid")
+                    continue
+                try:
+                    # Check if centroid is initialized (non-zero)
+                    is_initialized = not np.allclose(centroid_array, 0)
+
+                    # Calculate cosine similarity (0 for uninitialized centroids)
+                    if is_initialized:
                         similarity = self._calculate_cosine_similarity(aggregated_embedding, centroid_array)
-                        
-                        if similarity > best_similarity:
-                            best_similarity = similarity
-                            best_match = {
-                                'category_id': category['id'],
-                                'category': category,
-                                'similarity': similarity
-                            }
-                    except Exception as e:
-                        logger.warning(f"Error calculating similarity for category {category['id']}: {e}")
-                        continue
+                    else:
+                        similarity = 0.0  # No semantic info for uninitialized categories
+
+                    # Boost similarity if category matches keyword suggestions
+                    # BUT: Don't boost 'General Documents' - it should only be a fallback
+                    keyword_boost = 0.0
+                    if category['label'] in suggested_categories and category['label'] != 'General Documents':
+                        # Boost by position in suggestions (first match gets higher boost)
+                        position = suggested_categories.index(category['label'])
+
+                        # For uninitialized categories, rely heavily on keyword matching
+                        # But still differentiate by position
+                        if not is_initialized:
+                            keyword_boost = 0.8 - (position * 0.1)  # 0.8, 0.7, 0.6 for positions 0, 1, 2
+                        else:
+                            keyword_boost = 0.15 - (position * 0.05)  # 0.15, 0.10, 0.05 for initialized
+
+                        logger.info(f"Keyword boost for '{category['label']}': +{keyword_boost:.2f} (initialized={is_initialized})")
+
+                    boosted_similarity = min(1.0, similarity + keyword_boost)
+
+                    # Include category if it has semantic similarity OR keyword match (but not General Documents)
+                    if is_initialized or (category['label'] in suggested_categories and category['label'] != 'General Documents'):
+                        semantic_matches.append({
+                            'category_id': category['id'],
+                            'category': category,
+                            'similarity': similarity,
+                            'boosted_similarity': boosted_similarity,
+                            'keyword_match': category['label'] in suggested_categories,
+                            'is_initialized': is_initialized
+                        })
+                except Exception as e:
+                    logger.warning(f"Error calculating similarity for category {category.get('id')}: {e}")
+                    continue
+
+            # Sort by boosted similarity
+            semantic_matches.sort(key=lambda x: x['boosted_similarity'], reverse=True)
+            best_match = semantic_matches[0] if semantic_matches else None
+
+            # Dynamic threshold based on keyword confidence
+            base_threshold = self.similarity_threshold
+            # Lower threshold if strong keyword match
+            if best_match and best_match['keyword_match']:
+                dynamic_threshold = base_threshold - 0.1  # More lenient with keyword match
+            else:
+                dynamic_threshold = base_threshold
+
+            self.debugger.log_similarity_matrix(
+                similarities=semantic_matches[:10],
+                threshold=base_threshold,
+                dynamic_threshold=dynamic_threshold
+            )
             
-            # Use simple threshold
-            dynamic_threshold = self.similarity_threshold
-            
-            if best_match and best_match['similarity'] >= dynamic_threshold:
+            if best_match and best_match['boosted_similarity'] >= dynamic_threshold:
                 category_id = best_match['category_id']
                 category = best_match['category']
                 
@@ -285,6 +384,26 @@ class CategorizationService:
                     f"(similarity: {best_match['similarity']:.3f}, "
                     f"threshold: {dynamic_threshold:.3f})"
                 )
+
+                reason = (
+                    f"Boosted similarity ({best_match['boosted_similarity']:.3f}) "
+                    f"above dynamic threshold ({dynamic_threshold:.3f}) "
+                    f"keyword_match={best_match['keyword_match']}"
+                )
+                self.debugger.log_decision(
+                    decision="assigned",
+                    reason=reason,
+                    category=category['label'],
+                    similarity=best_match['similarity']
+                )
+                self.debugger.log_final_result({
+                    'category_id': category_id,
+                    'category_name': category['label'],
+                    'similarity': best_match['similarity'],
+                    'method': 'semantic',
+                    'chunks_processed': chunk_count
+                })
+                self.debugger.end_categorization()
                 
                 return {
                     'success': True,
@@ -308,6 +427,25 @@ class CategorizationService:
                     f"✓ Assigned to '{category['label']}' via semantic match "
                     f"(similarity: {best_match['similarity']:.3f}, below threshold)"
                 )
+
+                reason = (
+                    f"Best semantic match below threshold ({best_match['similarity']:.3f} "
+                    f"< {dynamic_threshold:.3f}) but used as fallback"
+                )
+                self.debugger.log_decision(
+                    decision="semantic_fallback",
+                    reason=reason,
+                    category=category['label'],
+                    similarity=best_match['similarity']
+                )
+                self.debugger.log_final_result({
+                    'category_id': category_id,
+                    'category_name': category['label'],
+                    'similarity': best_match['similarity'],
+                    'method': 'semantic_fallback',
+                    'chunks_processed': chunk_count
+                })
+                self.debugger.end_categorization()
                 
                 return {
                     'success': True,
@@ -329,6 +467,22 @@ class CategorizationService:
                 self.db_service.update_document(document_id, cluster_id=general_cat['id'])
                 
                 logger.info(f"✓ Assigned to 'General Documents' (no clear match)")
+
+                reason = "No categories exceeded threshold; defaulting to General Documents"
+                self.debugger.log_decision(
+                    decision="default_general",
+                    reason=reason,
+                    category='General Documents',
+                    similarity=0.0
+                )
+                self.debugger.log_final_result({
+                    'category_id': general_cat['id'],
+                    'category_name': 'General Documents',
+                    'similarity': 0.0,
+                    'method': 'default',
+                    'chunks_processed': chunk_count
+                })
+                self.debugger.end_categorization()
                 
                 return {
                     'success': True,
@@ -350,6 +504,22 @@ class CategorizationService:
             self.db_service.update_document(document_id, cluster_id=general_cat_id)
             
             logger.info(f"✓ Created and assigned to 'General Documents' (ID: {general_cat_id})")
+
+            reason = "General Documents category was missing; created and assigned"
+            self.debugger.log_decision(
+                decision="create_general",
+                reason=reason,
+                category='General Documents',
+                similarity=1.0
+            )
+            self.debugger.log_final_result({
+                'category_id': general_cat_id,
+                'category_name': 'General Documents',
+                'similarity': 1.0,
+                'method': 'created_default',
+                'chunks_processed': chunk_count
+            })
+            self.debugger.end_categorization()
             
             return {
                 'success': True,
@@ -363,6 +533,13 @@ class CategorizationService:
         
         except Exception as e:
             logger.error(f"Hybrid categorization failed: {e}", exc_info=True)
+            self.debugger.log_decision(
+                decision="error",
+                reason=str(e),
+                category=None,
+                similarity=0.0
+            )
+            self.debugger.end_categorization()
             return {
                 'success': False,
                 'error': str(e)
@@ -390,52 +567,114 @@ class CategorizationService:
             doc = self.db_service.get_document(document_id)
             if not doc:
                 raise ValueError("Document not found")
-            
+
             content = doc.get('content', '')
-            
+
             # Get chunks from database
             chunks = self.db_service.get_chunks_by_document(document_id)
-            
+
             if not chunks:
-                raise ValueError("No chunks found for document")
-            
+                # FALLBACK: Use document content directly
+                logger.warning(
+                    f"No chunks found for document {document_id}, "
+                    "falling back to content-based categorization"
+                )
+                return self.categorize_from_document_content(
+                    document_id, user_id, filename
+                )
+
             # Extract embeddings
             embeddings = []
             for chunk in chunks:
                 embedding = self.db_service.parse_embedding(chunk.get('embedding'))
                 if embedding is not None:
                     embeddings.append(embedding)
-            
+
             if not embeddings:
-                raise ValueError("No valid embeddings in chunks")
-            
+                logger.warning("No valid embeddings in chunks; falling back to content-based categorization")
+                return self.categorize_from_document_content(
+                    document_id=document_id,
+                    user_id=user_id,
+                    filename=filename
+                )
+
             # Aggregate embeddings (mean pooling)
             aggregated_embedding = np.mean(embeddings, axis=0)
-            
+
             # Normalize
             aggregated_embedding = aggregated_embedding / (np.linalg.norm(aggregated_embedding) + 1e-8)
-            
+
             # Update document embedding
             self.db_service.update_document(
                 document_id,
                 embedding=aggregated_embedding
             )
-            
+
             # Use hybrid categorization
             result = self.categorize_document_hybrid(
-                document_id,
-                user_id,
-                aggregated_embedding,
-                content,
-                filename
+                document_id=document_id,
+                user_id=user_id,
+                aggregated_embedding=aggregated_embedding,
+                content=content,
+                filename=filename,
+                chunk_count=len(embeddings)
             )
-            
+
             result['chunks_processed'] = len(embeddings)
-            
             return result
-        
+
         except Exception as e:
             logger.error(f"Chunk-based hybrid categorization failed: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def categorize_from_document_content(
+        self,
+        document_id: str,
+        user_id: str,
+        filename: str = "unknown"
+    ) -> Dict[str, Any]:
+        """
+        Fallback categorization using full document content when chunks are unavailable.
+        """
+        try:
+            logger.info(
+                f"Using content-based categorization for document {document_id}"
+            )
+
+            # Fetch document to access raw content
+            document = self.db_service.get_document(document_id)
+            if not document:
+                raise ValueError("Document not found")
+
+            content = document.get('content', '')
+            if not content:
+                raise ValueError("Document has no content")
+
+            # Generate embedding for entire document content
+            embedding = self.embedding_service.encode(content)
+
+            # Normalize embedding for consistency with chunk-based approach
+            embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
+
+            # Reuse hybrid categorization pipeline
+            result = self.categorize_document_hybrid(
+                document_id=document_id,
+                user_id=user_id,
+                aggregated_embedding=embedding,
+                content=content,
+                filename=filename,
+                chunk_count=0
+            )
+
+            result['method'] = 'content_fallback'
+            result['chunks_processed'] = 0
+            return result
+
+        except Exception as e:
+            logger.error(f"Content-based categorization failed: {e}")
             return {
                 'success': False,
                 'error': str(e)
@@ -529,44 +768,218 @@ class CategorizationService:
         
         logger.debug(f"Updated centroid for category {category_id}")
 
-    def _analyze_keywords(self, content: str, filename: str) -> List[str]:
+    def _calculate_cosine_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """
-        Simple keyword analysis to suggest categories based on content and filename.
+        Calculate cosine similarity between two embeddings.
+
+        Args:
+            embedding1: First embedding vector
+            embedding2: Second embedding vector
+
+        Returns:
+            Cosine similarity score (0-1)
         """
         try:
-            content_lower = content.lower()
-            filename_lower = filename.lower()
-            
-            # Define keyword mappings
-            keyword_mappings = {
-                'Academic Work': ['research', 'thesis', 'dissertation', 'academic', 'scholar', 'university', 'college'],
-                'Course Materials': ['course', 'lecture', 'assignment', 'homework', 'syllabus', 'curriculum'],
-                'Research & Papers': ['research', 'paper', 'study', 'analysis', 'findings', 'methodology'],
-                'Science & Tech': ['science', 'technology', 'tech', 'engineering', 'programming', 'code', 'software'],
-                'Language & Arts': ['language', 'literature', 'art', 'creative', 'writing', 'poetry', 'novel'],
-                'Health & Medicine': ['health', 'medical', 'medicine', 'doctor', 'patient', 'treatment', 'therapy'],
-                'Business & Finance': ['business', 'finance', 'money', 'investment', 'market', 'economy', 'corporate'],
-                'General Documents': ['document', 'file', 'text', 'general']
-            }
-            
-            suggested_categories = []
-            
-            # Check content keywords
-            for category, keywords in keyword_mappings.items():
-                for keyword in keywords:
-                    if keyword in content_lower or keyword in filename_lower:
-                        suggested_categories.append(category)
-                        break
-            
-            # If no keywords found, suggest General Documents
-            if not suggested_categories:
-                suggested_categories.append('General Documents')
-            
-            return suggested_categories
-            
+            # Ensure embeddings are numpy arrays
+            emb1 = np.array(embedding1, dtype=np.float32)
+            emb2 = np.array(embedding2, dtype=np.float32)
+
+            # Normalize vectors
+            emb1_norm = emb1 / (np.linalg.norm(emb1) + 1e-8)
+            emb2_norm = emb2 / (np.linalg.norm(emb2) + 1e-8)
+
+            # Calculate cosine similarity
+            similarity = float(np.dot(emb1_norm, emb2_norm))
+
+            # Clamp to [0, 1]
+            return max(0.0, min(1.0, similarity))
+
+        except Exception as e:
+            logger.error(f"Error calculating cosine similarity: {e}")
+            return 0.0
+
+    def _calculate_keyword_scores(self, content: str, filename: str) -> Dict[str, int]:
+        """Calculate keyword scores for each category."""
+        # Use filename and first 2000 chars of content for efficiency
+        text_sample = content[:2000] if len(content) > 2000 else content
+        content_lower = text_sample.lower()
+        filename_lower = filename.lower()
+
+        category_scores: Dict[str, int] = {}
+
+        # Check CATEGORY_KEYWORDS (main patterns)
+        for category, keywords in self.CATEGORY_KEYWORDS.items():
+            score = 0
+            for keyword in keywords:
+                if keyword in filename_lower:
+                    score += 3
+                elif keyword in content_lower:
+                    score += 1
+
+            if score > 0:
+                category_scores[category] = score
+
+        # Check SUBJECT_KEYWORDS (specific subjects)
+        for subject, keywords in self.SUBJECT_KEYWORDS.items():
+            score = 0
+            for keyword in keywords:
+                if keyword in filename_lower:
+                    score += 3
+                elif keyword in content_lower:
+                    score += 1
+
+            if score > 0:
+                if subject in ['Computer Science']:
+                    category_scores['Science & Tech'] = category_scores.get('Science & Tech', 0) + score
+                elif subject in ['Mathematics']:
+                    category_scores['Mathematics'] = category_scores.get('Mathematics', 0) + score
+                elif subject in ['Biology', 'Chemistry', 'Physics']:
+                    category_scores['Science & Tech'] = category_scores.get('Science & Tech', 0) + score
+
+        return category_scores
+
+    def _get_keyword_scores(self, content: str, filename: str) -> Dict[str, int]:
+        """Safe wrapper to expose keyword scores for debugging."""
+        try:
+            return self._calculate_keyword_scores(content, filename)
+        except Exception as e:
+            logger.error(f"Keyword score calculation failed: {e}")
+            return {}
+
+    def _analyze_keywords(self, content: str, filename: str) -> List[str]:
+        """
+        Enhanced keyword analysis using comprehensive keyword patterns.
+        Weighs filename more heavily than content, checks first 2000 chars of content.
+        """
+        try:
+            category_scores = self._calculate_keyword_scores(content, filename)
+
+            if category_scores:
+                sorted_categories = sorted(
+                    category_scores.items(),
+                    key=lambda x: x[1],
+                    reverse=True
+                )
+                suggested = [cat for cat, score in sorted_categories if score >= 1][:3]
+
+                if suggested:
+                    logger.info(f"Keyword suggestions (scores): {[(c, category_scores[c]) for c in suggested]}")
+                    return suggested
+
+            return ['General Documents']
+
         except Exception as e:
             logger.error(f"Keyword analysis failed: {e}")
             return ['General Documents']
+
+    def recategorize_uncategorized_documents(self, limit: int = 25) -> Dict[str, int]:
+        """
+        Re-run categorization for documents without an assigned category.
+
+        Args:
+            limit: Maximum number of uncategorized documents to process in one pass
+        """
+        docs = self.db_service.get_uncategorized_documents(limit=limit)
+        stats = {
+            'found': len(docs),
+            'processed': 0,
+            'skipped': 0,
+            'errors': 0,
+        }
+
+        for doc in docs:
+            doc_id = doc.get('id')
+            metadata = doc.get('metadata') or {}
+            user_id = metadata.get('user_id')
+            filename = doc.get('filename') or doc.get('title') or doc.get('name') or 'unknown'
+
+            if not doc_id or not user_id:
+                stats['skipped'] += 1
+                continue
+
+            try:
+                result = self.categorize_from_chunks(
+                    document_id=doc_id,
+                    user_id=user_id,
+                    filename=filename
+                )
+                if result.get('success'):
+                    stats['processed'] += 1
+                else:
+                    stats['errors'] += 1
+            except Exception as exc:
+                logger.error(f"Failed to recategorize document {doc_id}: {exc}")
+                stats['errors'] += 1
+
+        logger.info(
+            "Recategorized uncategorized documents "
+            f"(found={stats['found']}, processed={stats['processed']}, "
+            f"skipped={stats['skipped']}, errors={stats['errors']})"
+        )
+        return stats
+
+    def recategorize_documents(self, limit: int = 200, only_general: bool = True) -> Dict[str, int]:
+        """
+        Re-run categorization for existing documents (optionally limited to General/uncategorized).
+
+        Args:
+            limit: maximum documents to process
+            only_general: if True, only recategorize docs in General or uncategorized
+        """
+        docs = self.db_service.get_documents(limit=limit)
+        stats = {
+            'found': len(docs),
+            'processed': 0,
+            'skipped': 0,
+            'errors': 0,
+        }
+
+        # Cache general category ids per user to avoid repeat lookups
+        general_id_cache: Dict[str, Optional[int]] = {}
+
+        for doc in docs:
+            doc_id = doc.get('id')
+            metadata = doc.get('metadata') or {}
+            user_id = metadata.get('user_id')
+            filename = doc.get('filename') or doc.get('title') or doc.get('name') or 'unknown'
+            cluster_id = doc.get('cluster_id')
+
+            if not doc_id or not user_id:
+                stats['skipped'] += 1
+                continue
+
+            if only_general:
+                if user_id not in general_id_cache:
+                    cats = self.db_service.get_categories_by_user(user_id)
+                    general = next((c for c in cats if c.get('label') == 'General Documents'), None)
+                    general_id_cache[user_id] = general.get('id') if general else None
+                general_id = general_id_cache[user_id]
+
+                # Skip if the doc is already in a non-general category
+                if cluster_id is not None and cluster_id != general_id:
+                    stats['skipped'] += 1
+                    continue
+
+            try:
+                result = self.categorize_from_chunks(
+                    document_id=doc_id,
+                    user_id=user_id,
+                    filename=filename
+                )
+                if result.get('success'):
+                    stats['processed'] += 1
+                else:
+                    stats['errors'] += 1
+            except Exception as exc:
+                logger.error(f"Failed to recategorize document {doc_id}: {exc}")
+                stats['errors'] += 1
+
+        logger.info(
+            "Recategorized documents "
+            f"(found={stats['found']}, processed={stats['processed']}, "
+            f"skipped={stats['skipped']}, errors={stats['errors']})"
+        )
+        return stats
 
 
 # Singleton instance
@@ -791,11 +1204,8 @@ def get_categorization_service() -> CategorizationService:
         except Exception as e:
             logger.error(f"Failed to update category centroid with learning: {e}")
 
-    return _categorization_service
-
 
 # Backward compatibility alias
 def get_improved_categorization_service() -> CategorizationService:
     """Get or create categorization service singleton (backward compatibility)."""
     return get_categorization_service()
-

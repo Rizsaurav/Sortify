@@ -11,7 +11,7 @@ import google.generativeai as genai
 from core.embedding_service import get_embedding_service
 from core.database_service import get_database_service
 from utils import get_logger
-from config import get_settings
+from settings import get_settings
 
 logger = get_logger(__name__)
 

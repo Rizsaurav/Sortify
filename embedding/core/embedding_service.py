@@ -9,7 +9,7 @@ from typing import List, Optional, Union
 from sentence_transformers import SentenceTransformer
 
 from utils import get_logger
-from config import get_settings, get_model_config
+from settings import get_settings, get_model_config
 
 logger = get_logger(__name__)
 

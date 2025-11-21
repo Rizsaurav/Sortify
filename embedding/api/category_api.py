@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Form, Query
 
 from core import get_database_service
+from services import get_categorization_service
 from utils import get_logger
 
 logger = get_logger(__name__)
@@ -24,11 +25,23 @@ router = APIRouter(
 
 @router.get("")
 async def get_categories(user_id: str = Query(...)):
-    """Get all categories for a user."""
+    """Get all categories for a user. Auto-initializes standard categories if none exist."""
     try:
         db_service = get_database_service()
         categories = db_service.get_categories_by_user(user_id)
-        
+
+        # Auto-initialize standard categories if none exist
+        if not categories:
+            logger.info(f"No categories found for user {user_id}, initializing standard categories")
+            cat_service = get_categorization_service()
+
+            # Initialize standard categories (idempotent operation)
+            category_ids = cat_service.initialize_standard_categories(user_id)
+
+            # Fetch categories again after initialization
+            categories = db_service.get_categories_by_user(user_id)
+            logger.info(f"Initialized {len(categories)} standard categories for user {user_id}")
+
         return {
             "success": True,
             "categories": categories,

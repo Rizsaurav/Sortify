@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.embedding_service import get_embedding_service
-from config import get_settings, get_model_config
+from settings import get_settings, get_model_config
 
 
 def test_embedding_service():

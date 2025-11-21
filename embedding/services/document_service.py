@@ -68,7 +68,7 @@ class DocumentService:
             
             # 2. Chunk the document with metadata
             # Check if hierarchical chunking is enabled
-            from config import get_settings
+            from settings import get_settings
             settings = get_settings()
 
             if settings.use_hierarchical_chunking:
@@ -113,11 +113,8 @@ class DocumentService:
             # 4. Generate embeddings in batches
             self._embed_chunks(chunks)
             
-            # 5. Store chunks in database with token_count and metadata
+            # 5. Store chunks in database
             for chunk in chunks:
-                # Extract token_count from metadata if available
-                token_count = chunk.metadata.get('token_count') if chunk.metadata else None
-
                 self.db_service.insert_chunk(
                     chunk_id=chunk.chunk_id,
                     document_id=chunk.document_id,
@@ -126,9 +123,7 @@ class DocumentService:
                     embedding=chunk.embedding,
                     word_count=int(chunk.word_count),
                     char_count=chunk.char_count,
-                    token_count=token_count,
-                    user_id=user_id,
-                    metadata=chunk.metadata
+                    user_id=user_id
                 )
             
             # 6. Update parent document with metadata
@@ -202,7 +197,7 @@ class DocumentService:
         Returns:
             ChunkedDocument object
         """
-        from config import get_settings
+        from settings import get_settings
         settings = get_settings()
 
         logger.info(f"Using hierarchical chunking for {filename}")
@@ -279,7 +274,6 @@ class DocumentService:
 
         # Store chunks in database
         for chunk in all_chunks:
-            token_count = chunk.metadata.get('token_count') if chunk.metadata else None
             self.db_service.insert_chunk(
                 chunk_id=chunk.chunk_id,
                 document_id=chunk.document_id,
@@ -288,9 +282,7 @@ class DocumentService:
                 embedding=chunk.embedding,
                 word_count=int(chunk.word_count),
                 char_count=chunk.char_count,
-                token_count=token_count,
-                user_id=user_id,
-                metadata=chunk.metadata
+                user_id=user_id
             )
 
         # Update parent document with metadata
@@ -446,7 +438,6 @@ class DocumentService:
 
             # 5. Store chunks in database (run in executor for each chunk)
             for chunk in chunks:
-                token_count = chunk.metadata.get('token_count') if chunk.metadata else None
                 await loop.run_in_executor(
                     None,
                     self.db_service.insert_chunk,
@@ -457,9 +448,7 @@ class DocumentService:
                     chunk.embedding,
                     int(chunk.word_count),
                     chunk.char_count,
-                    token_count,
-                    user_id,
-                    chunk.metadata
+                    user_id
                 )
 
             # 6. Update parent document with metadata
@@ -618,7 +607,6 @@ class DocumentService:
 
         # Store all chunks in batch
         for chunk in chunks:
-            token_count = chunk.metadata.get('token_count') if chunk.metadata else None
             await loop.run_in_executor(
                 None,
                 self.db_service.insert_chunk,
@@ -629,9 +617,7 @@ class DocumentService:
                 chunk.embedding,
                 int(chunk.word_count),
                 chunk.char_count,
-                token_count,
-                user_id,
-                chunk.metadata
+                user_id
             )
 
 

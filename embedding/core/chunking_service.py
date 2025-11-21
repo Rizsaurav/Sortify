@@ -9,7 +9,7 @@ import re
 import asyncio
 from typing import List, Optional, AsyncGenerator, Dict, Any
 from utils import get_logger, TextProcessor
-from config import get_settings
+from settings import get_settings
 
 logger = get_logger(__name__)
 
@@ -93,7 +93,7 @@ class ChunkingService:
         """
         try:
             from sentence_transformers import SentenceTransformer
-            from config import get_model_config
+            from settings import get_model_config
 
             model_config = get_model_config()
             model_name = model_config.embedding_model_name
@@ -209,7 +209,8 @@ class ChunkingService:
         self,
         text: str,
         preprocess: bool = True,
-        return_metadata: bool = False
+        return_metadata: bool = False,
+        use_semantic: bool = None
     ) -> List[str] | List[dict]:
         """
         Split text into chunks using paragraph-aware and token-based splitting.
@@ -221,12 +222,16 @@ class ChunkingService:
             text: Input text to chunk
             preprocess: Whether to clean/normalize text first
             return_metadata: If True, return list of dicts with chunk + metadata
+            use_semantic: Override for semantic chunking (None=use instance setting, True=force semantic, False=disable semantic)
 
         Returns:
             List of text chunks, or list of dicts if return_metadata=True
         """
+        # Determine whether to use semantic chunking
+        should_use_semantic = self.use_semantic_chunking if use_semantic is None else use_semantic
+
         # Automatically use semantic chunking if enabled
-        if self.use_semantic_chunking:
+        if should_use_semantic:
             return self.chunk_text_semantic(
                 text,
                 preprocess=preprocess,
@@ -677,7 +682,8 @@ class ChunkingService:
         self,
         text: str,
         preprocess: bool = True,
-        return_metadata: bool = False
+        return_metadata: bool = False,
+        use_semantic: bool = None
     ) -> List[str] | List[dict]:
         """
         Async version of chunk_text for better integration with async systems.
@@ -686,18 +692,18 @@ class ChunkingService:
             text: Input text to chunk
             preprocess: Whether to clean/normalize text first
             return_metadata: If True, return list of dicts with chunk + metadata
+            use_semantic: Override for semantic chunking (None=use instance setting, True=force semantic, False=disable semantic)
 
         Returns:
             List of text chunks, or list of dicts if return_metadata=True
         """
         # Run the synchronous chunking in a thread pool to avoid blocking
         loop = asyncio.get_event_loop()
+
+        # Use a lambda to pass keyword arguments properly
         return await loop.run_in_executor(
             None,
-            self.chunk_text,
-            text,
-            preprocess,
-            return_metadata
+            lambda: self.chunk_text(text, preprocess, return_metadata, use_semantic)
         )
 
     async def chunk_text_stream(
@@ -1115,7 +1121,7 @@ class ChunkingService:
         else:
             # Fallback to sentences if no paragraphs
             logger.debug("No paragraphs found, using sentence-based chunking")
-            return self.chunk_text(text, preprocess=False, return_metadata=return_metadata)
+            return self.chunk_text(text, preprocess=False, return_metadata=return_metadata, use_semantic=False)
 
         if not paragraphs:
             return []

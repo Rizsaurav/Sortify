@@ -83,6 +83,14 @@ class Settings:
         
         # Logging
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+
+        # Debug Configuration
+        self.debug_categorization = os.getenv('DEBUG_CATEGORIZATION', 'true').lower() == 'true'
+        self.debug_output_format = os.getenv('DEBUG_OUTPUT_FORMAT', 'colored')
+        self.debug_log_file = os.getenv('DEBUG_LOG_FILE')
+        self.recategorize_on_start = os.getenv('RECAT_ON_START', 'true').lower() == 'true'
+        self.recategorize_limit = int(os.getenv('RECAT_LIMIT', '200'))
+        self.recategorize_once = os.getenv('RECAT_ONCE', 'true').lower() == 'true'
     
     def _get_required(self, key: str) -> str:
         """Get required environment variable or raise error."""
@@ -148,4 +156,3 @@ def get_model_config() -> ModelConfig:
 def get_database_config() -> DatabaseConfig:
     """Get database configuration."""
     return DatabaseConfig(get_settings())
-

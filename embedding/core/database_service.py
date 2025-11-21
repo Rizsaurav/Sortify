@@ -9,7 +9,7 @@ import numpy as np
 from supabase import create_client, Client
 
 from utils import get_logger
-from config import get_database_config
+from settings import get_database_config
 
 logger = get_logger(__name__)
 
@@ -84,33 +84,64 @@ class DatabaseService:
     
     def get_documents_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         try:
-            response = self.client.table('documents').select('*').execute()
-            
-            # Filter by user_id in metadata (RLS should handle this, but double-check)
-            docs = [
-                doc for doc in response.data
-                if doc.get('metadata', {}).get('user_id') == user_id
-            ]
-            return docs
-        
+            # Filter at database level using PostgreSQL JSONB operators
+            # This is 10-1000x faster than fetching all documents and filtering in Python
+            response = self.client.table('documents').select('*').eq(
+                'metadata->>user_id', user_id
+            ).execute()
+
+            return response.data
+
         except Exception as e:
             logger.error(f"Failed to get documents for user {user_id}: {e}")
+            return []
+
+    def get_documents(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetch a batch of documents ordered by creation time."""
+        try:
+            response = (
+                self.client.table('documents')
+                .select('*')
+                .order('created_at', desc=False)
+                .limit(limit)
+                .execute()
+            )
+            return response.data
+        except Exception as e:
+            logger.error(f"Failed to fetch documents: {e}")
+            return []
+
+    def get_uncategorized_documents(self, limit: int = 25) -> List[Dict[str, Any]]:
+        """Return documents that do not have a category assigned."""
+        try:
+            response = (
+                self.client.table('documents')
+                .select('*')
+                .is_('cluster_id', None)
+                .order('created_at', desc=False)
+                .limit(limit)
+                .execute()
+            )
+            return response.data
+        except Exception as e:
+            logger.error(f"Failed to fetch uncategorized documents: {e}")
             return []
     
     def check_duplicate_by_hash(self, content_hash: str, user_id: str) -> Optional[str]:
         try:
+            # Single query with both conditions - no N+1 problem
+            # Uses database-level filtering for both content_hash and user_id
             response = self.client.table('documents').select('id').eq(
                 'content_hash', content_hash
-            ).execute()
-            
-            # Check user_id
-            for doc in response.data:
-                full_doc = self.get_document(doc['id'])
-                if full_doc and full_doc.get('metadata', {}).get('user_id') == user_id:
-                    return doc['id']
-            
+            ).eq(
+                'metadata->>user_id', user_id
+            ).limit(1).execute()
+
+            if response.data:
+                return response.data[0]['id']
+
             return None
-        
+
         except Exception as e:
             logger.error(f"Duplicate check failed: {e}")
             return None
@@ -126,11 +157,12 @@ class DatabaseService:
         embedding: np.ndarray,
         word_count: int,
         char_count: int,
-        token_count: Optional[float] = None,
-        user_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        user_id: Optional[str] = None
     ) -> bool:
-
+        """
+        Insert a chunk into the database.
+        Note: token_count and metadata removed due to database schema constraints.
+        """
         try:
             data = {
                 'id': chunk_id,
@@ -138,21 +170,13 @@ class DatabaseService:
                 'chunk_index': chunk_index,
                 'content': content,
                 'embedding': embedding.tolist(),
-                'word_count': int(word_count),  # Ensure int for database
-                'char_count': int(char_count)  # Ensure int for database
+                'word_count': int(word_count),
+                'char_count': int(char_count)
             }
-
-            # Add token_count if provided (as float for precision)
-            if token_count is not None:
-                data['token_count'] = float(token_count)
 
             # Add user_id if provided
             if user_id is not None:
                 data['user_id'] = user_id
-
-            # Add metadata if provided
-            if metadata is not None:
-                data['metadata'] = metadata
 
             self.client.table('document_chunks').insert(data).execute()
             logger.debug(f"Inserted chunk {chunk_index} for document {document_id}")
@@ -248,19 +272,46 @@ class DatabaseService:
     # ==================== Helper Methods ====================
     
     def parse_embedding(self, embedding_data: Any) -> Optional[np.ndarray]:
-       
+        """Safely convert stored embedding payloads (lists/strings) to numpy vectors."""
         try:
             if embedding_data is None:
                 return None
-            
+
+            parsed = embedding_data
+
             if isinstance(embedding_data, str):
-                embedding_data = json.loads(embedding_data)
-            
-            return np.array(embedding_data, dtype=np.float32)
-        
+                try:
+                    parsed = json.loads(embedding_data)
+                except json.JSONDecodeError:
+                    # Fallback for python-list formatted strings
+                    import ast
+                    parsed = ast.literal_eval(embedding_data)
+
+            # Convert lists/tuples or numpy arrays to a clean float32 1D array
+            arr = np.array(parsed, dtype=np.float32).reshape(-1)
+            return arr
+
         except Exception as e:
             logger.error(f"Failed to parse embedding: {e}")
             return None
+
+    def update_category_centroid(self, category_id: int, centroid: Any) -> bool:
+        """Persist a centroid update for a category."""
+        try:
+            if centroid is None:
+                return False
+
+            if isinstance(centroid, np.ndarray):
+                centroid_payload = centroid.tolist()
+            else:
+                centroid_payload = list(centroid)
+
+            self.client.table('clusters').update({'centroid': centroid_payload}).eq('id', category_id).execute()
+            logger.debug(f"Updated centroid for category {category_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update centroid for category {category_id}: {e}")
+            return False
 
 
 _database_service: Optional[DatabaseService] = None
