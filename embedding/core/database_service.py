@@ -5,6 +5,7 @@ Centralized database access layer with error handling.
 
 from typing import List, Dict, Optional, Any
 import json
+import uuid
 import numpy as np
 from supabase import create_client, Client
 
@@ -84,6 +85,11 @@ class DatabaseService:
     
     def get_documents_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         try:
+            # Validate uuid to avoid DB errors
+            if not self.is_valid_uuid(user_id):
+                logger.warning(f"Skipping documents fetch; invalid user_id: {user_id}")
+                return []
+
             # Filter at database level using PostgreSQL JSONB operators
             # This is 10-1000x faster than fetching all documents and filtering in Python
             response = self.client.table('documents').select('*').eq(
@@ -259,6 +265,10 @@ class DatabaseService:
     def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
         
         try:
+            if not self.is_valid_uuid(user_id):
+                logger.warning(f"Skipping category fetch; invalid user_id: {user_id}")
+                return []
+
             response = self.client.table('clusters').select('*').eq(
                 'user_id', user_id
             ).execute()
@@ -311,6 +321,32 @@ class DatabaseService:
             return True
         except Exception as e:
             logger.error(f"Failed to update centroid for category {category_id}: {e}")
+            return False
+
+    def get_or_create_general_category(self, user_id: str) -> Optional[int]:
+        """Return the General Documents category id, creating it if needed."""
+        if not self.is_valid_uuid(user_id):
+            logger.warning(f"Cannot create General category; invalid user_id: {user_id}")
+            return None
+        try:
+            cats = self.get_categories_by_user(user_id)
+            general = next((c for c in cats if c.get('label') == 'General Documents'), None)
+            if general:
+                return general.get('id')
+
+            zero_centroid = np.zeros(1, dtype=np.float32)  # placeholder
+            cid = self.insert_category('General Documents', zero_centroid, user_id)
+            return cid
+        except Exception as e:
+            logger.error(f"Failed to get/create General category for {user_id}: {e}")
+            return None
+
+    @staticmethod
+    def is_valid_uuid(value: str) -> bool:
+        try:
+            uuid.UUID(str(value))
+            return True
+        except Exception:
             return False
 
 

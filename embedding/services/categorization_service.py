@@ -136,6 +136,10 @@ class CategorizationService:
             List of created category IDs
         """
         try:
+            if not self.db_service.is_valid_uuid(user_id):
+                logger.warning(f"Cannot initialize categories; invalid user_id: {user_id}")
+                return []
+
             existing_categories = self.db_service.get_categories_by_user(user_id)
             
             if existing_categories:
@@ -289,6 +293,8 @@ class CategorizationService:
                             'keyword_match': False,
                             'default': True
                         }
+                    else:
+                        raise ValueError("Unable to create or locate General Documents category")
             
             # Enhanced keyword analysis
             suggested_categories = self._analyze_keywords(content, filename)
@@ -897,6 +903,11 @@ class CategorizationService:
                 stats['skipped'] += 1
                 continue
 
+            if not self.db_service.is_valid_uuid(user_id):
+                logger.warning(f"Skipping document {doc_id}; invalid user_id {user_id}")
+                stats['skipped'] += 1
+                continue
+
             try:
                 result = self.categorize_from_chunks(
                     document_id=doc_id,
@@ -945,6 +956,11 @@ class CategorizationService:
             cluster_id = doc.get('cluster_id')
 
             if not doc_id or not user_id:
+                stats['skipped'] += 1
+                continue
+
+            if not self.db_service.is_valid_uuid(user_id):
+                logger.warning(f"Skipping document {doc_id}; invalid user_id {user_id}")
                 stats['skipped'] += 1
                 continue
 
