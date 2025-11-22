@@ -7,7 +7,7 @@ import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import AllFiles from "./components/Dashboard/AllFiles"
 import Dashboard from "./components/Dashboard/Dashboard"
-
+import ProfilePage from "./components/Profile/ProfilePage"
 import { ProfileProvider } from "./components/userProfiles/ProfileProviders"
 
 function App() {
@@ -44,6 +44,13 @@ function App() {
             ? <Dashboard />
             : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
+          <Route
+            path="/profile"
+            element={
+              session || localStorage.getItem("isGuest") === "true"
+                ? <ProfilePage />
+                : <Navigate to="/login" replace /> }
+          />
         </Routes>
       </ProfileProvider>
     </Router>

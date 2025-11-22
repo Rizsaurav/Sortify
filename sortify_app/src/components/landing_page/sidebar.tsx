@@ -14,7 +14,7 @@ import {
   MagnifyingGlassIcon,
   PresentationChartLineIcon,
 } from "@heroicons/react/24/outline"
-
+import { UserIcon } from "@heroicons/react/24/outline"
 // Constants
 const SIDEBAR_WIDTH = "w-64"
 const LOGO_HEIGHT = "h-16"
@@ -27,6 +27,7 @@ const navigation = [
   { name: "All Files", href: "#", icon: DocumentIcon, count: 1247 },
   { name: "Search", href: "#", icon: MagnifyingGlassIcon },
   { name: "Upload", href: "#", icon: CloudArrowUpIcon },
+  { name: "Profile", href: "/profile", icon: UserIcon },
 ]
 
 // Category configuration
@@ -55,6 +56,7 @@ const getNavigationButtonStyles = (isActive: boolean) => {
   )
 }
 
+
 export function Sidebar() {
   return (
     <div className={cn("flex h-screen flex-col bg-sidebar border-r border-sidebar-border", SIDEBAR_WIDTH)}>
@@ -76,18 +78,29 @@ export function Sidebar() {
           <ul className="space-y-1">
             {navigation.map((item) => (
               <li key={item.name}>
-                <Button
-                  variant={item.current ? "secondary" : "ghost"}
-                  className={getNavigationButtonStyles(item.current || false)}
-                >
-                  <item.icon className={ICON_SIZE} />
-                  <span className="flex-1 text-left">{item.name}</span>
-                  {item.count && (
-                    <Badge variant="secondary" className="ml-auto">
-                      {item.count}
-                    </Badge>
-                  )}
-                </Button>
+                {item.href ? (
+                  <Button asChild variant={item.current ? "secondary" : "ghost"} className={getNavigationButtonStyles(item.current || false)}>
+                    <a href={item.href} className="flex w-full items-center gap-3">
+                      <item.icon className={ICON_SIZE} />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      {item.count && (
+                        <Badge variant="secondary" className="ml-auto">
+                          {item.count}
+                        </Badge>
+                      )}
+                    </a>
+                  </Button>
+                ) : (
+                  <Button variant={item.current ? "secondary" : "ghost"} className={getNavigationButtonStyles(item.current || false)}>
+                    <item.icon className={ICON_SIZE} />
+                    <span className="flex-1 text-left">{item.name}</span>
+                    {item.count && (
+                      <Badge variant="secondary" className="ml-auto">
+                        {item.count}
+                      </Badge>
+                    )}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
