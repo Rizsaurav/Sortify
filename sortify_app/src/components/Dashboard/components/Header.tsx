@@ -1,5 +1,12 @@
 import React from 'react';
 import { Search, Bell, Sun, Moon } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '../../landing_page/UI/ui-kit'
 import type { UserProfile } from '../types';
 
 interface HeaderProps {
@@ -58,26 +65,49 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         <div className="relative">
-          <button
-            onClick={onNavigateToProfile}
-            className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors"
-          >
-            {userProfile?.avatar_url ? (
-              <img
-                src={userProfile.avatar_url}
-                alt={userProfile.username}
-                className="w-8 h-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                {userProfile ? getInitials(userProfile.username) : 'U'}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors" type="button">
+                {userProfile?.avatar_url ? (
+                  <img src={userProfile.avatar_url} alt={userProfile.username} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                    {userProfile ? getInitials(userProfile.username) : 'U'}
+                  </div>
+                )}
+                <div className="hidden md:block text-left">
+                  <p className="text-sm font-medium">{userProfile?.username || 'User'}</p>
+                  <p className="text-xs text-muted-foreground">{userProfile?.email || ''}</p>
+                </div>
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="w-64 top-16 right-4 left-auto -translate-x-0 -translate-y-0">
+              <div className="p-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Username</p>
+                  <p className="text-sm font-medium">{userProfile?.username || 'User'}</p>
+                </div>
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground">Full name</p>
+                  <p className="text-sm">{userProfile?.full_name || ''}</p>
+                </div>
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="text-sm">{userProfile?.email || ''}</p>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <AlertDialogCancel asChild>
+                    <button className="flex-1 px-3 py-2 border rounded">Close</button>
+                  </AlertDialogCancel>
+                  <AlertDialogAction asChild>
+                    <a href="/profile" className="w-full">
+                      <button className="w-full px-3 py-2 bg-primary text-white rounded">Go to Profile</button>
+                    </a>
+                  </AlertDialogAction>
+                </div>
               </div>
-            )}
-            <div className="hidden md:block text-left">
-              <p className="text-sm font-medium">{userProfile?.username || 'User'}</p>
-              <p className="text-xs text-muted-foreground">{userProfile?.email || ''}</p>
-            </div>
-          </button>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </header>
