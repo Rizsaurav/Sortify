@@ -83,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
           <div className="flex items-center gap-2">
             <img 
-              src="/sortify-logo.png" 
+              src="/logo.png" 
               alt="Sortify Logo" 
               className="w-8 h-8 object-contain"
             />
