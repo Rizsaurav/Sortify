@@ -14,7 +14,7 @@ import {
   MagnifyingGlassIcon,
   PresentationChartLineIcon,
 } from "@heroicons/react/24/outline"
-
+import { UserIcon } from "@heroicons/react/24/outline"
 // Constants
 const SIDEBAR_WIDTH = "w-64"
 const LOGO_HEIGHT = "h-16"
@@ -54,6 +54,7 @@ const getNavigationButtonStyles = (isActive: boolean) => {
       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
   )
 }
+
 
 export function Sidebar() {
   return (
