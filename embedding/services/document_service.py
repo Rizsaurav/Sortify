@@ -131,7 +131,8 @@ class DocumentService:
                 document_id,
                 content_hash=content_hash,
                 total_chunks=len(chunks),
-                is_chunked=True
+                is_chunked=True,
+                user_id=user_id  # <<< UPDATED: Ensures top-level user_id column is set
             )
             
             logger.info(f"✓ Stored {len(chunks)} chunks for document {document_id}")
@@ -184,18 +185,6 @@ class DocumentService:
     ) -> ChunkedDocument:
         """
         Process document using hierarchical chunking (parent-child structure).
-
-        Args:
-            document_id: Document ID
-            filename: Original filename
-            content: Full document content
-            user_id: User ID
-            file_type: File MIME type
-            file_size: File size in bytes
-            content_hash: Content hash for duplicate detection
-
-        Returns:
-            ChunkedDocument object
         """
         from settings import get_settings
         settings = get_settings()
@@ -290,7 +279,8 @@ class DocumentService:
             document_id,
             content_hash=content_hash,
             total_chunks=len(all_chunks),
-            is_chunked=True
+            is_chunked=True,
+            user_id=user_id  # <<< UPDATED: Ensures top-level user_id column is set
         )
 
         logger.info(
@@ -365,17 +355,6 @@ class DocumentService:
     ) -> ChunkedDocument:
         """
         Async version of process_and_store_document for better performance.
-
-        Args:
-            document_id: Document ID (already created in DB)
-            filename: Original filename
-            content: Full document content
-            user_id: User ID
-            file_type: File MIME type
-            file_size: File size in bytes
-
-        Returns:
-            ChunkedDocument object
         """
         logger.info(f"Processing document async {document_id}: {filename}")
 
@@ -459,7 +438,8 @@ class DocumentService:
                 **{
                     'content_hash': content_hash,
                     'total_chunks': len(chunks),
-                    'is_chunked': True
+                    'is_chunked': True,
+                    'user_id': user_id  # <<< UPDATED: Ensures top-level user_id column is set
                 }
             )
 
@@ -490,18 +470,6 @@ class DocumentService:
         """
         Process and store document using streaming for large files.
         More memory-efficient for huge documents.
-
-        Args:
-            document_id: Document ID (already created in DB)
-            filename: Original filename
-            content: Full document content
-            user_id: User ID
-            file_type: File MIME type
-            file_size: File size in bytes
-            batch_size: Number of chunks to process before yielding
-
-        Returns:
-            ChunkedDocument object
         """
         logger.info(f"Processing large document (streaming) {document_id}: {filename}")
 
@@ -574,7 +542,8 @@ class DocumentService:
                 **{
                     'content_hash': content_hash,
                     'total_chunks': len(chunks),
-                    'is_chunked': True
+                    'is_chunked': True,
+                    'user_id': user_id  # <<< UPDATED: Ensures top-level user_id column is set
                 }
             )
 
@@ -631,5 +600,3 @@ def get_document_service() -> DocumentService:
     if _document_service is None:
         _document_service = DocumentService()
     return _document_service
-
-

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Bell, Sun, Moon } from 'lucide-react';
+import { Search, Sun, Moon } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -7,7 +7,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '../../landing_page/UI/ui-kit'
-import type { UserProfile } from '../types';
+import { NotificationBell } from '../Notifications';
+import type { UserProfile, UploadedFile } from '../types';
 
 interface HeaderProps {
   userProfile: UserProfile | null;
@@ -15,6 +16,9 @@ interface HeaderProps {
   onSearchChange: (query: string) => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  allFiles: UploadedFile[];
+  onPreviewFile: (file: UploadedFile) => void;
+  onNavigateToAllFiles: () => void;
   onNavigateToProfile: () => void;
 }
 
@@ -24,7 +28,10 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   darkMode,
   onToggleDarkMode,
-  onNavigateToProfile
+  onNavigateToProfile,
+  allFiles,
+  onPreviewFile,
+  onNavigateToAllFiles
 }) => {
   const getInitials = (name: string) => {
     return name
@@ -59,10 +66,11 @@ export const Header: React.FC<HeaderProps> = ({
           {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
-        <button className="p-2 rounded-lg hover:bg-accent transition-colors relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-        </button>
+        <NotificationBell
+          allFiles={allFiles}
+          onPreviewFile={onPreviewFile}
+          onNavigateToAllFiles={onNavigateToAllFiles}
+        />
 
         <div className="relative">
           <AlertDialog>

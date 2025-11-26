@@ -82,8 +82,9 @@ async def upload_document(
         # Insert parent document to database (with FULL content)
         doc_id = db_service.insert_document(
             content=content_str,  # FULL CONTENT, not preview!
+            user_id=user_id,  # Top-level user_id for efficient querying
             metadata={
-                'user_id': user_id,
+                'user_id': user_id,  # Also keep in metadata for backward compatibility
                 'filename': unique_filename,
                 'original_filename': file.filename,
                 'type': file.content_type,

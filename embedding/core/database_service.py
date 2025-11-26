@@ -33,17 +33,28 @@ class DatabaseService:
     def insert_document(
         self,
         content: str,
+        user_id: str,  # <<< ADDED: Top-level user_id required for schema efficiency
         metadata: Dict[str, Any],
         embedding: Optional[np.ndarray] = None,
-        cluster_id: Optional[int] = None
+        cluster_id: Optional[int] = None,
+        content_hash: Optional[str] = None,
+        total_chunks: int = 0,
+        is_chunked: bool = False
     ) -> str:
-
+        """
+        Insert a document with all schema fields populated.
+        """
         try:
             data = {
                 'content': content,
+                'user_id': user_id,  # <<< Uses dedicated column
                 'metadata': metadata,
-                'embedding': embedding.tolist() if embedding is not None else None,
-                'cluster_id': cluster_id
+                # <<< CHANGED: Pass np.ndarray directly for proper VECTOR handling
+                'embedding': embedding, 
+                'cluster_id': cluster_id,
+                'content_hash': content_hash,
+                'total_chunks': total_chunks,
+                'is_chunked': is_chunked
             }
             
             response = self.client.table('documents').insert(data).execute()
@@ -61,10 +72,8 @@ class DatabaseService:
         **updates
     ) -> bool:
         try:
-            # Convert numpy arrays to lists
-            for key, value in updates.items():
-                if isinstance(value, np.ndarray):
-                    updates[key] = value.tolist()
+
+            # We assume the client/driver handles vector serialization correctly.
             
             self.client.table('documents').update(updates).eq('id', doc_id).execute()
             logger.debug(f"Updated document {doc_id}")
@@ -90,10 +99,10 @@ class DatabaseService:
                 logger.warning(f"Skipping documents fetch; invalid user_id: {user_id}")
                 return []
 
-            # Filter at database level using PostgreSQL JSONB operators
-            # This is 10-1000x faster than fetching all documents and filtering in Python
+           
+            # This is significantly faster for filtering
             response = self.client.table('documents').select('*').eq(
-                'metadata->>user_id', user_id
+                'user_id', user_id
             ).execute()
 
             return response.data
@@ -135,12 +144,11 @@ class DatabaseService:
     
     def check_duplicate_by_hash(self, content_hash: str, user_id: str) -> Optional[str]:
         try:
-            # Single query with both conditions - no N+1 problem
-            # Uses database-level filtering for both content_hash and user_id
+
             response = self.client.table('documents').select('id').eq(
                 'content_hash', content_hash
             ).eq(
-                'metadata->>user_id', user_id
+                'user_id', user_id
             ).limit(1).execute()
 
             if response.data:
@@ -167,7 +175,6 @@ class DatabaseService:
     ) -> bool:
         """
         Insert a chunk into the database.
-        Note: token_count and metadata removed due to database schema constraints.
         """
         try:
             data = {
@@ -175,12 +182,13 @@ class DatabaseService:
                 'document_id': document_id,
                 'chunk_index': chunk_index,
                 'content': content,
-                'embedding': embedding.tolist(),
+                # Pass np.ndarray directly
+                'embedding': embedding, 
                 'word_count': int(word_count),
                 'char_count': int(char_count)
             }
 
-            # Add user_id if provided
+            # Add user_id if provided (Chunk table already had this column)
             if user_id is not None:
                 data['user_id'] = user_id
 
@@ -193,7 +201,6 @@ class DatabaseService:
             return False
     
     def get_chunks_by_document(self, document_id: str) -> List[Dict[str, Any]]:
-        
         try:
             response = self.client.table('document_chunks').select('*').eq(
                 'document_id', document_id
@@ -206,7 +213,6 @@ class DatabaseService:
             return []
     
     def get_chunks_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        
         try:
             response = self.client.table('document_chunks').select(
                 'id, content, embedding, document_id, chunk_index'
@@ -226,11 +232,11 @@ class DatabaseService:
         centroid: np.ndarray,
         user_id: str
     ) -> int:
-        
         try:
             data = {
                 'label': label,
-                'centroid': centroid.tolist(),
+                #Pass np.ndarray directly
+                'centroid': centroid,
                 'user_id': user_id
             }
             
@@ -248,11 +254,8 @@ class DatabaseService:
         category_id: int,
         **updates
     ) -> bool:
-       
         try:
-            for key, value in updates.items():
-                if isinstance(value, np.ndarray):
-                    updates[key] = value.tolist()
+            #Removed .tolist() loop
             
             self.client.table('clusters').update(updates).eq('id', category_id).execute()
             logger.debug(f"Updated category {category_id}")
@@ -263,7 +266,6 @@ class DatabaseService:
             return False
     
     def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
-        
         try:
             if not self.is_valid_uuid(user_id):
                 logger.warning(f"Skipping category fetch; invalid user_id: {user_id}")
@@ -311,9 +313,9 @@ class DatabaseService:
             if centroid is None:
                 return False
 
-            if isinstance(centroid, np.ndarray):
-                centroid_payload = centroid.tolist()
-            else:
+            # Pass np.ndarray directly
+            centroid_payload = centroid
+            if not isinstance(centroid, np.ndarray):
                 centroid_payload = list(centroid)
 
             self.client.table('clusters').update({'centroid': centroid_payload}).eq('id', category_id).execute()
@@ -323,8 +325,11 @@ class DatabaseService:
             logger.error(f"Failed to update centroid for category {category_id}: {e}")
             return False
 
-    def get_or_create_general_category(self, user_id: str) -> Optional[int]:
-        """Return the General Documents category id, creating it if needed."""
+    def get_or_create_general_category(self, user_id: str, embedding_dimension: int = 1024) -> Optional[int]:
+        """
+        Return the General Documents category id, creating it if needed.
+        <<< Accepts embedding_dimension to avoid 1D vector crashes.
+        """
         if not self.is_valid_uuid(user_id):
             logger.warning(f"Cannot create General category; invalid user_id: {user_id}")
             return None
@@ -334,7 +339,8 @@ class DatabaseService:
             if general:
                 return general.get('id')
 
-            zero_centroid = np.zeros(1, dtype=np.float32)  # placeholder
+            # Use the provided dimension
+            zero_centroid = np.zeros(embedding_dimension, dtype=np.float32)
             cid = self.insert_category('General Documents', zero_centroid, user_id)
             return cid
         except Exception as e:

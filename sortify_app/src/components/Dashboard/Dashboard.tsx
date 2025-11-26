@@ -270,6 +270,9 @@ export default function Dashboard() {
             darkMode={darkMode}
             onToggleDarkMode={() => setDarkMode(!darkMode)}
             onNavigateToProfile={handleNavigateToProfile}
+            allFiles={uploadedFiles}
+            onPreviewFile={handlePreviewFile}
+            onNavigateToAllFiles={handleNavigateToAllFiles}
           />
 
           <main 
