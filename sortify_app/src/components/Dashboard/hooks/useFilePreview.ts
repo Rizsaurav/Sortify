@@ -67,7 +67,12 @@ export const useFilePreview = () => {
         .createSignedUrl(storagePath, 3600); // Valid for 1 hour
 
       if (error) {
-        console.error('Error creating signed URL:', error);
+        // Suppress console errors for missing files (Object not found)
+        if (error.message?.includes('Object not found')) {
+          console.warn(`File not found in storage: ${storagePath}`);
+        } else {
+          console.error('Error creating signed URL:', error);
+        }
         return null;
       }
 
@@ -115,7 +120,12 @@ export const useFilePreview = () => {
             url
           }));
         } else {
-          console.error('Failed to get file URL');
+          console.warn('File not available in storage:', file.name);
+          // Set error state so UI can show appropriate message
+          setPreviewState(prev => ({
+            ...prev,
+            url: null
+          }));
         }
       }
     } catch (error) {

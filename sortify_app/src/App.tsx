@@ -2,37 +2,31 @@ import { useState, useEffect } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "../../supabase/client"
-
 import { SignupForm } from "./components/Auth/forms/SignUpForm"
 import { LoginForm } from "./components/Auth/forms/LogInForm"
 import AllFiles from "./components/Dashboard/AllFiles"
 import Dashboard from "./components/Dashboard/Dashboard"
 import ProfilePage from "./components/Profile/ProfilePage"
+import ChatPage from "./components/ChatPage/ChatPage"
 import { ProfileProvider } from "./components/userProfiles/ProfileProviders"
-
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
     })
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
     })
-
     return () => subscription.unsubscribe()
   }, [])
-
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
-
   return (
     <Router>
       <ProfileProvider>
@@ -42,6 +36,9 @@ function App() {
           <Route path="//all-files" element={session || localStorage.getItem("isGuest") === "true" ? <AllFiles /> : <Navigate to="/login" replace />} />
           <Route path="/dashboard" element={session || localStorage.getItem("isGuest") === "true"
             ? <Dashboard />
+            : <Navigate to="/login" replace />} />
+          <Route path="/chat" element={session || localStorage.getItem("isGuest") === "true"
+            ? <ChatPage />
             : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
           <Route
@@ -56,5 +53,4 @@ function App() {
     </Router>
   )
 }
-
 export default App

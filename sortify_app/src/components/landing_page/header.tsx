@@ -6,10 +6,6 @@ import {
   AlertDialog,
   AlertDialogTrigger,
   AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
 } from "./UI/ui-kit"
@@ -74,9 +70,9 @@ export function Header() {
         }
 
         // As a final guaranteed fallback, use an initials SVG data URL so an image is always shown
-        if (mounted) setAvatarSrc(svgDataUrlForInitials(profile?.full_name || profile?.username))
+        if (mounted) setAvatarSrc(svgDataUrlForInitials(profile?.full_name || profile?.username || 'U'))
       } catch (err) {
-        if (mounted) setAvatarSrc(svgDataUrlForInitials(profile?.full_name || profile?.username))
+        if (mounted) setAvatarSrc(svgDataUrlForInitials(profile?.full_name || profile?.username || 'U'))
       }
     }
     resolveAvatar()
@@ -179,8 +175,8 @@ export function Header() {
                     <p className="text-sm">{loading ? '' : profile?.full_name ?? ''}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="text-sm">{loading ? '' : profile?.email ?? ''}</p>
+                    <p className="text-xs text-muted-foreground">Bio</p>
+                    <p className="text-sm">{loading ? '' : profile?.bio ?? ''}</p>
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">

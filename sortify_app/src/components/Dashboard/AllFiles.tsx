@@ -107,6 +107,9 @@ export default function AllFiles() {
             darkMode={false}
             onToggleDarkMode={() => {}}
             onNavigateToProfile={() => navigate('/profile')}
+            allFiles={allFiles}
+            onPreviewFile={handlePreviewFile}
+            onNavigateToAllFiles={() => navigate('/all-files')}
             />
         </div>
 
