@@ -5,6 +5,7 @@ Clean separation of concerns with proper dependency injection.
 
 import io
 import uuid
+import asyncio
 from datetime import datetime
 from typing import Optional
 
@@ -76,8 +77,24 @@ async def upload_document(
                 doc_id=duplicate_id,
                 task_id=None,
                 timestamp=datetime.now()
-
             )
+
+        # Construct storage path for original file (user_id/filename)
+        storage_path = f"{user_id}/{unique_filename}"
+
+        # Upload original binary file to Supabase Storage (best-effort).
+        # IMPORTANT: frontend expects bucket 'user-files' and path 'user_id/filename'.
+        file_url: Optional[str] = None
+        try:
+            file_url = db_service.upload_file_to_bucket(
+                bucket="user-files",
+                path=storage_path,
+                data=content_bytes,
+                content_type=file.content_type or "application/octet-stream",
+            )
+        except Exception as e:
+            # Do not fail the upload if storage upload fails; just log
+            logger.error(f"Failed to upload original file to storage: {e}")
 
         # Insert parent document to database (with FULL content)
         doc_id = db_service.insert_document(
@@ -91,7 +108,10 @@ async def upload_document(
                 'size': len(content_bytes)
             },
             embedding=None,  # Will be set after chunking
-            cluster_id=None  # Will be set after categorization
+            cluster_id=None,  # Will be set after categorization
+            storage_path=storage_path,
+            file_path=storage_path,  # Same as storage_path for now
+            file_url=file_url  # Public URL for original file (if available)
         )
         
         logger.info(f"Created document {doc_id} with {len(content_str)} characters")
@@ -110,8 +130,8 @@ async def upload_document(
             file_size=len(content_bytes)
         )
         
-        # Process in background (this will chunk AND categorize)
-        background_tasks.add_task(task_manager.process_queue)
+        # Kick off async processing (chunking + embeddings + categorization)
+        asyncio.create_task(task_manager.process_queue())
         
         logger.info(f"Task {task_id} queued for processing")
         
@@ -273,6 +293,28 @@ async def _extract_content(file: UploadFile, content_bytes: bytes) -> str:
         
         elif file.content_type and file.content_type.startswith('image/'):
             return f"Image: {file.filename}\nType: {file.content_type}\nSize: {len(content_bytes)} bytes"
+        
+        # Basic PPTX support (best-effort; falls back on failure)
+        elif (
+            file.content_type
+            == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ) or (file.filename and file.filename.lower().endswith(".pptx")):
+            try:
+                from pptx import Presentation  # type: ignore
+
+                prs = Presentation(io.BytesIO(content_bytes))
+                slide_texts = []
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        text = getattr(shape, "text", None)
+                        if text and text.strip():
+                            slide_texts.append(text.strip())
+
+                content = "\n\n".join(slide_texts)
+                return content if content.strip() else f"PPTX: {file.filename} (no text)"
+            except Exception as e:
+                logger.error(f"PPTX extraction failed: {e}")
+                return f"PPTX: {file.filename} (extraction failed)"
         
         else:
             return f"File: {file.filename}\nType: {file.content_type or 'unknown'}"
