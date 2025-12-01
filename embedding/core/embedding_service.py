@@ -43,7 +43,7 @@ class EmbeddingService:
             self.model = SentenceTransformer(
                 self.model_name,
                 device=self.device,
-                trust_remote_code=True  # Required for BGE-M3
+                trust_remote_code=True
             )
 
             # Verify embedding dimension matches expected
@@ -67,7 +67,7 @@ class EmbeddingService:
         normalize: bool = True,
         use_instruction: bool = False,
         instruction_prompt: str = "Represent this document for retrieval"
-    ) -> np.ndarray:
+    ) -> Union[List[float], List[List[float]]]:
         """
         Generate embeddings using BGE-M3.
 
@@ -80,7 +80,8 @@ class EmbeddingService:
             instruction_prompt: Instruction to use (BGE-M3 specific)
 
         Returns:
-            Embedding array (single vector or batch)
+            Embedding vector(s) as a **Python list** of floats/lists, ensuring
+            **JSON serialization compatibility** for database storage.
         """
         try:
             # Handle single text
@@ -89,14 +90,12 @@ class EmbeddingService:
                 texts = [texts]
 
             # BGE-M3 instruction format
-            # For queries: "Represent this sentence for searching relevant passages: {query}"
-            # For documents: raw text (no instruction)
             if use_instruction:
                 processed_texts = [f"{instruction_prompt}: {text}" for text in texts]
             else:
                 processed_texts = texts
 
-            # Generate embeddings with BGE-M3
+            # Generate embeddings as np.ndarray for optimal performance
             embeddings = self.model.encode(
                 processed_texts,
                 batch_size=batch_size,
@@ -104,23 +103,25 @@ class EmbeddingService:
                 normalize_embeddings=normalize,
                 convert_to_numpy=True
             )
+            
+            # Convert NumPy array to standard Python list for database insertion.
+            # This resolves the 'Object of type ndarray is not JSON serializable' error.
+            embeddings_list = embeddings.tolist()
 
             # Return single embedding if input was single text
             if is_single:
-                return embeddings[0]
+                return embeddings_list[0]
 
-            return embeddings
+            return embeddings_list
 
         except Exception as e:
             logger.error(f"Error generating embeddings: {e}")
             raise
     
-    def encode_query(self, query: str) -> np.ndarray:
+    def encode_query(self, query: str) -> List[float]:
         """
         Encode a search query using BGE-M3 query instruction.
-
-        BGE-M3 uses different instructions for queries vs documents
-        to optimize retrieval performance.
+        Returns a serializable Python list of floats.
         """
         return self.encode(
             query,
@@ -128,11 +129,10 @@ class EmbeddingService:
             instruction_prompt="Represent this sentence for searching relevant passages"
         )
 
-    def encode_document(self, document: str) -> np.ndarray:
+    def encode_document(self, document: str) -> List[float]:
         """
         Encode a document using BGE-M3 (no instruction).
-
-        Documents are encoded without instructions in BGE-M3.
+        Returns a serializable Python list of floats.
         """
         return self.encode(document, use_instruction=False)
     
@@ -141,7 +141,11 @@ class EmbeddingService:
         texts: List[str],
         batch_size: int = 32,
         show_progress: bool = False
-    ) -> np.ndarray:
+    ) -> List[List[float]]:
+        """
+        Encodes a batch of texts.
+        Returns a serializable Python list of lists of floats.
+        """
         return self.encode(
             texts,
             batch_size=batch_size,
