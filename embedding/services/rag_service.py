@@ -1,11 +1,12 @@
 """
 RAG (Retrieval-Augmented Generation) service.
-Handles semantic search and answer generation using LLM.
+Handles semantic search, context synthesis, and hybrid answer generation.
+Optimized for performance using vectorized operations.
 """
 
 import time
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import google.generativeai as genai
 
 from core.embedding_service import get_embedding_service
@@ -18,25 +19,28 @@ logger = get_logger(__name__)
 
 class RAGService:
     """
-    RAG system for question answering over documents.
-    Single Responsibility: Semantic search + answer generation.
+    High-performance RAG system.
+    Features: Vectorized search, hybrid knowledge fallback, and smart context filtering.
     """
     
     def __init__(self):
-        """Initialize RAG service."""
         settings = get_settings()
         
         self.embedding_service = get_embedding_service()
         self.db_service = get_database_service()
         
         # Configure Gemini
-        genai.configure(api_key=settings.google_api_key)
-        self.llm_model = genai.GenerativeModel('gemini-2.5-flash')
-        
+        try:
+            genai.configure(api_key=settings.google_api_key)
+            self.llm_model = genai.GenerativeModel('gemini-2.5-flash')
+        except Exception as e:
+            logger.error(f"Failed to initialize Gemini: {e}")
+            raise
+
         self.top_k = settings.rag_top_k
         self.similarity_threshold = settings.rag_similarity_threshold
         
-        logger.info("RAGService initialized with Gemini LLM")
+        logger.info("RAGService initialized (Vectorized Search Enabled)")
     
     def ask(
         self,
@@ -46,318 +50,257 @@ class RAGService:
         threshold: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Answer a question using document chunks + LLM.
-        
-        Args:
-            question: User question
-            user_id: User ID for filtering documents
-            top_k: Number of top chunks to retrieve
-            threshold: Similarity threshold
-        
-        Returns:
-            Dict with answer, sources, metadata
+        Answer a question using a hybrid approach (Documents > General Knowledge).
         """
         start_time = time.time()
+        top_k = top_k or self.top_k
+        threshold = threshold or self.similarity_threshold
         
         try:
-            top_k = top_k or self.top_k
-            threshold = threshold or self.similarity_threshold
-            
             logger.info(f"RAG query: '{question}' (user={user_id})")
 
-            # Check if this is a general query about user's documents
-            is_general_query = self._is_general_document_query(question)
+            # 1. Encode Question
+            query_embedding = self.embedding_service.encode_query(question)
 
-            # 1. Generate question embedding
-            question_embedding = self.embedding_service.encode_query(question)
+            # 2. Vector Search (Optimized)
+            # Detect "general queries" to adjust search strategy
+            is_general = self._is_general_document_query(question)
+            search_k = min(top_k * 3, 30) if is_general else top_k
+            search_threshold = 0.15 if is_general else threshold
 
-            # 2. Search for relevant chunks
-            # For general queries, use lower threshold and more chunks
-            if is_general_query:
-                logger.info("Detected general document query - using agentic mode")
-                relevant_chunks = self._search_chunks(
-                    question_embedding,
-                    user_id,
-                    top_k=min(top_k * 3, 20),  # Get more chunks for overview
-                    threshold=0.2  # Lower threshold for broader coverage
-                )
-            else:
-                relevant_chunks = self._search_chunks(
-                    question_embedding,
-                    user_id,
-                    top_k,
-                    threshold
-                )
-
-            if not relevant_chunks:
-                # Fallback to AI-only response when no documents found
-                logger.info(f"No relevant chunks found, using AI fallback for: '{question}'")
-                fallback_answer = self._generate_fallback_answer(question, user_id)
-                return {
-                    'answer': fallback_answer,
-                    'sources': [],
-                    'chunks_used': 0,
-                    'response_time': time.time() - start_time,
-                    'fallback_used': True
-                }
-            
-            # 3. Get document filenames for sources
-            doc_ids = list(set(chunk['document_id'] for chunk in relevant_chunks))
-            doc_names = self._get_document_names(doc_ids)
-            
-            # 4. Build context from chunks
-            context = self._build_context(relevant_chunks, doc_names)
-            
-            # 5. Generate answer with LLM
-            answer = self._generate_answer(question, context, relevant_chunks, doc_names)
-            
-            # Extract unique sources
-            sources = list(dict.fromkeys(
-                doc_names.get(chunk['document_id'], 'Unknown')
-                for chunk in relevant_chunks
-            ))
-            
-            response_time = time.time() - start_time
-            
-            logger.info(
-                f"✓ RAG answer generated in {response_time:.2f}s "
-                f"({len(relevant_chunks)} chunks used)"
+            relevant_chunks = self._vector_search(
+                query_embedding,
+                user_id,
+                top_k=search_k,
+                threshold=search_threshold
             )
+
+            # 3. Context Construction & Smart Filtering
+            # Filter out low-quality "metadata only" chunks
+            filtered_chunks = self._filter_low_quality_chunks(relevant_chunks)
+            
+            # If we filtered everything out but had results, fallback to original
+            if not filtered_chunks and relevant_chunks:
+                filtered_chunks = relevant_chunks
+
+            # 4. Generate Answer
+            doc_names = self._resolve_document_names(filtered_chunks, user_id)
+            context_str = self._build_context(filtered_chunks, doc_names)
+            
+            # Generate response (Prompt allows fallback to general knowledge)
+            answer = self._generate_hybrid_answer(question, context_str)
+            
+            # extract sources only if context was actually used
+            sources = []
+            if filtered_chunks and "I couldn't find" not in answer:
+                sources = list(dict.fromkeys(
+                    doc_names.get(c['document_id'], 'Unknown') 
+                    for c in filtered_chunks
+                ))
+
+            response_time = time.time() - start_time
             
             return {
                 'answer': answer,
                 'sources': sources,
-                'chunks_used': len(relevant_chunks),
+                'chunks_used': len(filtered_chunks),
                 'response_time': response_time,
-                'fallback_used': False
+                'fallback_used': len(filtered_chunks) == 0
             }
         
         except Exception as e:
-            logger.error(f"RAG query failed: {e}", exc_info=True)
+            logger.error(f"RAG error: {e}", exc_info=True)
             return {
-                'answer': f"Sorry, I encountered an error: {str(e)}",
+                'answer': "I encountered an internal error processing your request.",
                 'sources': [],
-                'chunks_used': 0,
-                'response_time': time.time() - start_time,
-                'fallback_used': True,
                 'error': str(e)
             }
-    
-    def _search_chunks(
+
+    def _vector_search(
         self,
-        query_embedding: np.ndarray,
+        query_vec: np.ndarray,
         user_id: str,
         top_k: int,
         threshold: float
     ) -> List[Dict[str, Any]]:
         """
-        Search for relevant chunks using cosine similarity.
-        
-        Args:
-            query_embedding: Query embedding vector
-            user_id: User ID
-            top_k: Number of results
-            threshold: Minimum similarity
-        
-        Returns:
-            List of relevant chunks with scores
+        Perform optimized vectorized cosine similarity search.
+        Replaces slow Python loops with numpy matrix multiplication.
         """
-        # Get all chunks for user
-        chunks_data = self.db_service.get_chunks_by_user(user_id)
+        # Fetch all candidate chunks (In production, move this logic to DB/pgvector)
+        all_chunks = self.db_service.get_chunks_by_user(user_id)
         
-        if not chunks_data:
-            logger.warning(f"No chunks found for user {user_id}")
+        if not all_chunks:
             return []
-        
-        # Compute similarities
-        results = []
-        for chunk in chunks_data:
-            embedding = self.db_service.parse_embedding(chunk.get('embedding'))
-            content = chunk.get('content', '').strip()
-            
-            if embedding is None or not content:
-                continue
-            
-            # Cosine similarity
-            similarity = float(np.dot(query_embedding, embedding) / (
-                np.linalg.norm(query_embedding) * np.linalg.norm(embedding) + 1e-8
-            ))
-            
-            # Filter by threshold
-            if similarity > threshold:
-                results.append({
-                    'content': content,
-                    'similarity': similarity,
-                    'document_id': chunk.get('document_id'),
-                    'chunk_index': chunk.get('chunk_index')
-                })
-        
-        # Sort by similarity and take top k
-        results.sort(key=lambda x: x['similarity'], reverse=True)
-        results = results[:top_k]
-        
-        logger.debug(
-            f"Found {len(results)} relevant chunks "
-            f"(threshold={threshold}, top_k={top_k})"
-        )
-        
-        return results
-    
-    def _get_document_names(self, doc_ids: List[str]) -> Dict[str, str]:
-        """Get document filenames by IDs."""
-        doc_names = {}
-        for doc_id in doc_ids:
-            doc = self.db_service.get_document(doc_id)
-            if doc:
-                filename = doc.get('metadata', {}).get('filename', 'Unknown')
-                doc_names[doc_id] = filename
-        return doc_names
-    
-    def _build_context(
-        self,
-        chunks: List[Dict[str, Any]],
-        doc_names: Dict[str, str]
-    ) -> str:
-        """Build context string from chunks."""
-        context_blocks = []
-        for i, chunk in enumerate(chunks):
-            doc_name = doc_names.get(chunk['document_id'], 'Unknown')
-            similarity_pct = chunk['similarity'] * 100
-            
-            block = (
-                f"[Chunk {i+1} from {doc_name} "
-                f"(relevance {similarity_pct:.1f}%)]:\n"
-                f"{chunk['content']}"
-            )
-            context_blocks.append(block)
-        
-        return "\n\n---\n\n".join(context_blocks)
-    
-    def _generate_answer(
-        self,
-        question: str,
-        context: str,
-        chunks: List[Dict[str, Any]],
-        doc_names: Dict[str, str]
-    ) -> str:
-        """Generate answer using LLM."""
-        prompt = f"""You are a helpful study assistant. Answer the question based ONLY on the documents below.
-If the documents do not contain enough information, say so clearly.
 
-Documents:
+        # Pre-allocate arrays for speed
+        valid_chunks = []
+        embeddings_matrix = []
+        
+        for chunk in all_chunks:
+            emb = self.db_service.parse_embedding(chunk.get('embedding'))
+            if emb is not None:
+                valid_chunks.append(chunk)
+                embeddings_matrix.append(emb)
+
+        if not valid_chunks:
+            return []
+
+        # Convert to numpy matrix (N x D)
+        # Optimizes calculation: 1000 chunks -> 1 matrix op instead of 1000 loop ops
+        matrix = np.vstack(embeddings_matrix)
+        
+        # Calculate Dot Product (Cosine Similarity if normalized)
+        # scores shape: (N,)
+        scores = np.dot(matrix, query_vec)
+        
+        # Filter by threshold using boolean masking (very fast)
+        mask = scores >= threshold
+        
+        if not np.any(mask):
+            return []
+
+        # Get indices of passing scores
+        indices = np.where(mask)[0]
+        filtered_scores = scores[indices]
+        
+        # Sort top K
+        # partition is faster than sort for finding top K
+        if len(filtered_scores) > top_k:
+            top_indices_local = np.argpartition(filtered_scores, -top_k)[-top_k:]
+            final_indices = indices[top_indices_local]
+            # Sort just the top K
+            sorted_order = np.argsort(scores[final_indices])[::-1]
+            final_indices = final_indices[sorted_order]
+        else:
+            # Sort all if less than K
+            sorted_order = np.argsort(filtered_scores)[::-1]
+            final_indices = indices[sorted_order]
+
+        # Construct result list
+        results = []
+        for idx in final_indices:
+            chunk = valid_chunks[idx]
+            results.append({
+                'content': chunk.get('content'),
+                'similarity': float(scores[idx]),
+                'document_id': chunk.get('document_id'),
+                'chunk_index': chunk.get('chunk_index'),
+                # Pass metadata for filtering later
+                'char_count': chunk.get('char_count', 0) 
+            })
+            
+        return results
+
+    def _filter_low_quality_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter out chunks that are likely just metadata/filenames.
+        Example: "File: document.json Type: json"
+        """
+        filtered = []
+        for chunk in chunks:
+            content = chunk['content'].strip()
+            # If chunk is very short and contains 'File:' but no real semantic content
+            if len(content) < 100 and "File:" in content and "Type:" in content:
+                continue
+            filtered.append(chunk)
+        return filtered
+
+    def _resolve_document_names(self, chunks: List[Dict], user_id: str) -> Dict[str, str]:
+        """
+        Efficiently resolve document names.
+        Optimization: Fetch all user docs once instead of N+1 DB calls.
+        """
+        doc_ids = set(c['document_id'] for c in chunks)
+        if not doc_ids:
+            return {}
+
+        # Get all docs for user (Cached/Batch approach usually better, 
+        # but relying on current DB service capabilities)
+        all_docs = self.db_service.get_documents_by_user(user_id)
+        
+        # Create lookup map
+        return {
+            doc['id']: doc.get('metadata', {}).get('filename', 'Unknown')
+            for doc in all_docs
+            if doc['id'] in doc_ids
+        }
+
+    def _build_context(self, chunks: List[Dict], doc_names: Dict[str, str]) -> str:
+        blocks = []
+        for c in chunks:
+            name = doc_names.get(c['document_id'], 'Unknown')
+            # Add semantic markers for the LLM
+            blocks.append(f"--- Document: {name} ---\n{c['content']}")
+        return "\n\n".join(blocks)
+
+    def _generate_hybrid_answer(self, question: str, context: str) -> str:
+        """
+        Generates an answer allowing fallback to general knowledge.
+        Solves the "I can't answer" problem when context is thin.
+        """
+        
+        # If no context at all
+        if not context.strip():
+             return self._generate_general_knowledge_answer(question)
+
+        prompt = f"""Role: Expert Research Assistant.
+Task: Answer the user's question.
+
+Priority 1: Use the provided [CONTEXT] below. Synthesize information from multiple chunks.
+Priority 2: If the [CONTEXT] contains only metadata (filenames, types) or is irrelevant, IGNORE IT and answer using your general knowledge.
+
+[CONTEXT START]
 {context}
+[CONTEXT END]
 
 Question: {question}
 
 Instructions:
-- Provide a clear, concise answer.
-- Cite documents by their file name in-line where relevant.
-- If multiple documents are relevant, synthesize them and cite each used source.
-- Be specific and accurate based on the provided information."""
-        
+- If the answer is found in the context, provide a detailed response.
+- If using general knowledge because the context is poor, start with: "I couldn't find specific details in your documents, but generally speaking..."
+- DO NOT simply state "The file is named X".
+- Synthesize; do not list chunks.
+"""
         try:
             response = self.llm_model.generate_content(prompt)
-            
-            # Extract text safely
-            if hasattr(response, "text") and response.text:
-                return response.text
-            elif getattr(response, "candidates", None):
-                return response.candidates[0].content.parts[0].text
-            else:
-                return "I could not generate an answer from the provided documents."
-        
+            return self._extract_text(response)
         except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
-            return f"Error generating answer: {str(e)}"
+            logger.error(f"LLM error: {e}")
+            return "I'm having trouble generating an answer right now."
+
+    def _generate_general_knowledge_answer(self, question: str) -> str:
+        prompt = f"""You are a helpful AI assistant. The user asked a question, but their uploaded documents contained no relevant information.
+        
+Question: {question}
+
+Please provide a helpful, accurate answer based on your general knowledge. Start by clarifying that this info is not from their files."""
+        try:
+            response = self.llm_model.generate_content(prompt)
+            return self._extract_text(response)
+        except Exception:
+            return "I couldn't find relevant information in your documents."
+
+    def _extract_text(self, response: Any) -> str:
+        """Safe extraction of text from Gemini response."""
+        if hasattr(response, "text") and response.text:
+            return response.text
+        if getattr(response, "candidates", None):
+            return response.candidates[0].content.parts[0].text
+        return ""
 
     def _is_general_document_query(self, question: str) -> bool:
-        """
-        Detect if query is asking about user's documents in general.
-        Examples: "what files do I have", "summarize my documents", "tell me about my files"
-        """
-        question_lower = question.lower()
-        general_patterns = [
-            'what files', 'my files', 'my documents', 'tell me about',
-            'what do i have', 'show me', 'list', 'summarize',
-            'overview', 'what are', 'all my', 'everything'
-        ]
-        return any(pattern in question_lower for pattern in general_patterns)
-
-    def _generate_fallback_answer(self, question: str, user_id: str) -> str:
-        """
-        Generate AI response when no relevant documents are found.
-        For general queries, get ALL documents and summarize.
-        """
-        # Check if this is a general query about user's files
-        if self._is_general_document_query(question):
-            # Get all user's documents
-            all_docs = self.db_service.get_documents_by_user(user_id)
-            if all_docs:
-                doc_list = "\n".join([
-                    f"- {doc.get('metadata', {}).get('filename', 'Unknown')} (Category: {doc.get('category', 'Uncategorized')})"
-                    for doc in all_docs[:50]  # Limit to 50 docs
-                ])
-
-                prompt = f"""You are a helpful document assistant. The user asked about their uploaded files.
-
-Question: {question}
-
-User's Documents:
-{doc_list}
-
-Instructions:
-- Provide a comprehensive summary of the user's files
-- Group by categories if relevant
-- Be specific and helpful
-- Mention document types and categories"""
-
-                try:
-                    response = self.llm_model.generate_content(prompt)
-                    if hasattr(response, "text") and response.text:
-                        return response.text
-                    elif getattr(response, "candidates", None):
-                        return response.candidates[0].content.parts[0].text
-                except Exception as e:
-                    logger.error(f"Failed to generate document summary: {e}")
-                    return f"You have {len(all_docs)} documents uploaded. Please be more specific in your question to get detailed information."
-
-        # General fallback for non-document questions
-        prompt = f"""You are a helpful AI assistant. The user asked a question but no relevant documents were found in their uploaded files.
-
-Question: {question}
-
-Instructions:
-- Provide a helpful, informative answer based on your general knowledge
-- Be clear and concise
-- If the question is about specific documents or files, acknowledge that you couldn't find them and suggest the user upload relevant documents
-- Otherwise, provide a general answer to their question"""
-
-        try:
-            response = self.llm_model.generate_content(prompt)
-
-            if hasattr(response, "text") and response.text:
-                prefix = "I couldn't find this information in your uploaded documents. However, based on general knowledge:\n\n"
-                return prefix + response.text
-            elif getattr(response, "candidates", None):
-                prefix = "I couldn't find this information in your uploaded documents. However, based on general knowledge:\n\n"
-                return prefix + response.candidates[0].content.parts[0].text
-            else:
-                return f"I couldn't find relevant information about '{question}' in your documents. Try uploading relevant files or rephrase your question."
-
-        except Exception as e:
-            logger.error(f"Fallback generation failed: {e}")
-            return f"I couldn't find relevant information about '{question}' in your documents. Please upload relevant files or try a different question."
+        """Detect overview queries."""
+        q = question.lower()
+        patterns = ['what files', 'my files', 'list documents', 'overview', 'summary', 'what do i have']
+        return any(p in q for p in patterns)
 
 
-# Singleton instance
+# Singleton
 _rag_service: Optional[RAGService] = None
 
-
 def get_rag_service() -> RAGService:
-    """Get or create RAG service singleton."""
     global _rag_service
     if _rag_service is None:
         _rag_service = RAGService()
     return _rag_service
-
-
