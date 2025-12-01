@@ -22,29 +22,41 @@ router = APIRouter(
 async def ask_from_supabase(
     question: str = Form(...),
     user_id: str = Form(...),
-    top_k: int = Form(5)
+    top_k: int = Form(5),
+    history: str = Form(None)  # JSON string of conversation history
 ):
     """
     Answer questions using document chunks + Gemini for NLG.
-    
+
     Args:
         question: Question to answer
         user_id: User ID for filtering documents
         top_k: Number of top chunks to retrieve
-    
+        history: Optional JSON-encoded conversation history
+
     Returns:
         Answer with sources and metadata
     """
     try:
         logger.info(f"RAG request: '{question}' (user={user_id})")
-        
+
+        # Parse conversation history if provided
+        conversation_history = None
+        if history:
+            try:
+                import json
+                conversation_history = json.loads(history)
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse conversation history, ignoring")
+
         # Get RAG service
         rag_service = get_rag_service()
-        
-        # Ask question
+
+        # Ask question with history
         result = rag_service.ask(
             question=question,
             user_id=user_id,
+            history=conversation_history,
             top_k=top_k
         )
         
