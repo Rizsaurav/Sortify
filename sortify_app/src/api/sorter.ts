@@ -27,6 +27,11 @@ export type SearchResult = {
     response_time: number
 }
 
+export type ConversationMessage = {
+    role: 'user' | 'assistant'
+    content: string
+}
+
 export type TaskStatus = {
     task_id: string
     doc_id: string
@@ -55,11 +60,21 @@ export async function uploadDocument(file: File, userId: string): Promise<Upload
     return response.json();
 }
 
-export async function searchDocuments(question: string, userId: string, topK: number = 5): Promise<SearchResult> {
+export async function searchDocuments(
+    question: string,
+    userId: string,
+    topK: number = 5,
+    history?: ConversationMessage[]
+): Promise<SearchResult> {
     const formData = new FormData();
     formData.append('question', question);
     formData.append('user_id', userId);
     formData.append('top_k', topK.toString());
+
+    // Add conversation history if provided
+    if (history && history.length > 0) {
+        formData.append('history', JSON.stringify(history));
+    }
 
     const response = await fetch(`${API_BASE_URL}/ask_supabase`, {
         method: 'POST',
