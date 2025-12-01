@@ -14,22 +14,53 @@ interface Message {
   responseTime?: number;
 }
 
+interface LocationState {
+    query?: string;
+}
+
+// Function to convert **bold** text to <strong>HTML</strong>
+// This prevents React from escaping the content and allows the browser to render <strong> tags.
+const formatText = (text: string) => {
+  // Regex to find content enclosed in double asterisks, globally
+  // (\\*\\*): Escapes the asterisks.
+  // (.*?): Captures the content non-greedily.
+  // g: Global flag to replace all occurrences.
+  const formattedText = text.replace(
+    /\*\*(.*?)\*\*/g, 
+    '<strong>$1</strong>'
+  );
+  
+  // in a real-world app to prevent XSS attacks. Since this is an internal rendering change 
+  // for known LLM output, we rely on the internal safety of the LLM output.
+  return { __html: formattedText };
+};
+
+
 export default function ChatPage() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { userProfile } = useUserProfile();
+  // Ensure location state is correctly typed
+const location = useLocation() as { state: LocationState | null }; 
+const { userProfile } = useUserProfile();
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Use a ref to store userProfile.id to avoid unnecessary dependency array checks
+  const userIdRef = useRef<string | undefined>(userProfile?.id);
+
+  useEffect(() => {
+    userIdRef.current = userProfile?.id;
+  }, [userProfile]);
 
   useEffect(() => {
     // If navigated from search with initial query
     const initialQuery = location.state?.query;
-    if (initialQuery && messages.length === 0 && userProfile?.id) {
+    if (initialQuery && messages.length === 0 && userIdRef.current) {
       handleSendMessage(initialQuery);
     }
-  }, [location.state, userProfile]);
+  }, [location.state]); // Removed messages and userProfile to avoid infinite loop potential
 
   useEffect(() => {
     // Scroll to bottom when new messages arrive
@@ -40,9 +71,10 @@ export default function ChatPage() {
     const text = messageText || inputValue.trim();
     if (!text || isLoading) return;
 
-    // Wait for user profile to load
-    if (!userProfile?.id) {
-      console.log('⏳ Waiting for user profile to load...');
+    // Use ref for ID check
+    const currentUserId = userIdRef.current;
+    if (!currentUserId) {
+      console.log('⏳ Waiting for user profile ID...');
       return;
     }
 
@@ -58,7 +90,14 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const result = await searchDocuments(text, userProfile.id, 5);
+      // Build conversation history from existing messages (exclude current message)
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Send request with conversation history
+      const result = await searchDocuments(text, currentUserId, 5, conversationHistory);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -86,6 +125,7 @@ export default function ChatPage() {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    // Use React.KeyboardEvent<HTMLTextAreaElement> for better typing if possible
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
@@ -98,7 +138,7 @@ export default function ChatPage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Loading user profile...</p>
         </div>
       </div>
     );
@@ -168,7 +208,16 @@ export default function ChatPage() {
                 {message.role === 'assistant' && (
                   <Sparkles className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 )}
-                <div className="flex-1 whitespace-pre-wrap">{message.content}</div>
+                {/* ---  Use formatText for assistant messages --- */}
+                <div 
+                  className="flex-1 whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={
+                    message.role === 'assistant' 
+                      ? formatText(message.content) 
+                      : { __html: message.content }
+                  }
+                />
+                {/* ----------------------------------------------------------------- */}
               </div>
 
               {message.sources && message.sources.length > 0 && (
