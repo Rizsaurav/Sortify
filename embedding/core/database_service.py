@@ -3,8 +3,8 @@ Database service - Single responsibility: All Supabase interactions.
 Centralized database access layer with error handling.
 """
 
-from typing import List, Dict, Optional, Any
-import json
+from typing import List, Optional, Union, Any, Dict
+import json # Corrected: Imports standard JSON module for string parsing/serialization.
 import uuid
 import numpy as np
 from supabase import create_client, Client
@@ -14,6 +14,14 @@ from settings import get_database_config
 
 logger = get_logger(__name__)
 
+
+def _to_serializable_vector(vector: Optional[Union[np.ndarray, List[float]]]) -> Optional[List[float]]:
+    """Helper to convert numpy arrays to JSON-serializable Python lists, or return lists as is."""
+    if vector is None:
+        return None
+    if isinstance(vector, np.ndarray):
+        return vector.tolist()
+    return vector
 
 class DatabaseService:
     def __init__(self, url: Optional[str] = None, key: Optional[str] = None):
@@ -33,9 +41,9 @@ class DatabaseService:
     def insert_document(
         self,
         content: str,
-        user_id: str,  # <<< ADDED: Top-level user_id required for schema efficiency
+        user_id: str,
         metadata: Dict[str, Any],
-        embedding: Optional[np.ndarray] = None,
+        embedding: Optional[Union[np.ndarray, List[float]]] = None,
         cluster_id: Optional[int] = None,
         content_hash: Optional[str] = None,
         total_chunks: int = 0,
@@ -45,15 +53,15 @@ class DatabaseService:
         file_url: Optional[str] = None
     ) -> str:
         """
-        Insert a document with all schema fields populated.
+        Insert a document with all schema fields populated, ensuring the embedding
+        is serialized as a Python list if provided as a NumPy array.
         """
         try:
             data = {
                 'content': content,
-                'user_id': user_id,  # <<< Uses dedicated column
+                'user_id': user_id,
                 'metadata': metadata,
-                # <<< CHANGED: Pass np.ndarray directly for proper VECTOR handling
-                'embedding': embedding,
+                'embedding': _to_serializable_vector(embedding), # Ensures vector is serialized for insertion.
                 'cluster_id': cluster_id,
                 'content_hash': content_hash,
                 'total_chunks': total_chunks,
@@ -77,9 +85,10 @@ class DatabaseService:
         doc_id: str,
         **updates
     ) -> bool:
+        """Updates a document, safely serializing the embedding if present in updates."""
         try:
-
-            # We assume the client/driver handles vector serialization correctly.
+            if 'embedding' in updates:
+                updates['embedding'] = _to_serializable_vector(updates['embedding']) # Serializes embedding before update.
             
             self.client.table('documents').update(updates).eq('id', doc_id).execute()
             logger.debug(f"Updated document {doc_id}")
@@ -90,6 +99,7 @@ class DatabaseService:
             return False
     
     def get_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a document by its ID."""
         try:
             response = self.client.table('documents').select('*').eq('id', doc_id).execute()
             return response.data[0] if response.data else None
@@ -97,16 +107,44 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to get document {doc_id}: {e}")
             return None
+
+    # ==================== Storage Operations ====================
+
+    def upload_file_to_bucket(
+        self,
+        bucket: str,
+        path: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+    ) -> Optional[str]:
+        """Uploads a binary file to Supabase Storage and returns a public URL."""
+        try:
+            storage_client = self.client.storage.from_(bucket)
+
+            storage_client.upload(
+                path,
+                data,
+                {
+                    "content-type": content_type or "application/octet-stream",
+                    "upsert": "true",
+                },
+            )
+
+            public_url = storage_client.get_public_url(path)
+            logger.info("Uploaded file to storage bucket=%s path=%s", bucket, path)
+            return public_url
+
+        except Exception as e:
+            logger.error(f"Failed to upload file to storage bucket {bucket}: {e}")
+            return None
     
     def get_documents_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieves all documents associated with a specific user ID."""
         try:
-            # Validate uuid to avoid DB errors
             if not self.is_valid_uuid(user_id):
                 logger.warning(f"Skipping documents fetch; invalid user_id: {user_id}")
                 return []
 
-           
-            # This is significantly faster for filtering
             response = self.client.table('documents').select('*').eq(
                 'user_id', user_id
             ).execute()
@@ -149,8 +187,8 @@ class DatabaseService:
             return []
     
     def check_duplicate_by_hash(self, content_hash: str, user_id: str) -> Optional[str]:
+        """Checks for an existing document with the same content hash and user ID."""
         try:
-
             response = self.client.table('documents').select('id').eq(
                 'content_hash', content_hash
             ).eq(
@@ -174,13 +212,13 @@ class DatabaseService:
         document_id: str,
         chunk_index: int,
         content: str,
-        embedding: np.ndarray,
+        embedding: Union[np.ndarray, List[float]],
         word_count: int,
         char_count: int,
         user_id: Optional[str] = None
     ) -> bool:
         """
-        Insert a chunk into the database.
+        Insert a chunk into the database, ensuring the embedding is serialized.
         """
         try:
             data = {
@@ -188,13 +226,11 @@ class DatabaseService:
                 'document_id': document_id,
                 'chunk_index': chunk_index,
                 'content': content,
-                # Pass np.ndarray directly
-                'embedding': embedding, 
+                'embedding': _to_serializable_vector(embedding), # Ensures vector is serialized for insertion.
                 'word_count': int(word_count),
                 'char_count': int(char_count)
             }
 
-            # Add user_id if provided (Chunk table already had this column)
             if user_id is not None:
                 data['user_id'] = user_id
 
@@ -207,6 +243,7 @@ class DatabaseService:
             return False
     
     def get_chunks_by_document(self, document_id: str) -> List[Dict[str, Any]]:
+        """Retrieves all chunks for a specific document, ordered by index."""
         try:
             response = self.client.table('document_chunks').select('*').eq(
                 'document_id', document_id
@@ -219,6 +256,7 @@ class DatabaseService:
             return []
     
     def get_chunks_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieves essential data for all chunks associated with a specific user."""
         try:
             response = self.client.table('document_chunks').select(
                 'id, content, embedding, document_id, chunk_index'
@@ -235,14 +273,14 @@ class DatabaseService:
     def insert_category(
         self,
         label: str,
-        centroid: np.ndarray,
+        centroid: Union[np.ndarray, List[float]],
         user_id: str
     ) -> int:
+        """Inserts a new category, ensuring the centroid is serialized."""
         try:
             data = {
                 'label': label,
-                #Pass np.ndarray directly
-                'centroid': centroid,
+                'centroid': _to_serializable_vector(centroid), # Ensures vector is serialized for insertion.
                 'user_id': user_id
             }
             
@@ -260,8 +298,10 @@ class DatabaseService:
         category_id: int,
         **updates
     ) -> bool:
+        """Updates a category, safely serializing the centroid if present in updates."""
         try:
-            #Removed .tolist() loop
+            if 'centroid' in updates:
+                updates['centroid'] = _to_serializable_vector(updates['centroid']) # Serializes centroid before update.
             
             self.client.table('clusters').update(updates).eq('id', category_id).execute()
             logger.debug(f"Updated category {category_id}")
@@ -272,6 +312,7 @@ class DatabaseService:
             return False
     
     def get_categories_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieves all categories associated with a specific user ID."""
         try:
             if not self.is_valid_uuid(user_id):
                 logger.warning(f"Skipping category fetch; invalid user_id: {user_id}")
@@ -299,6 +340,7 @@ class DatabaseService:
 
             if isinstance(embedding_data, str):
                 try:
+                    import json # Corrected: Imports json locally to resolve NameError.
                     parsed = json.loads(embedding_data)
                 except json.JSONDecodeError:
                     # Fallback for python-list formatted strings
@@ -319,10 +361,7 @@ class DatabaseService:
             if centroid is None:
                 return False
 
-            # Pass np.ndarray directly
-            centroid_payload = centroid
-            if not isinstance(centroid, np.ndarray):
-                centroid_payload = list(centroid)
+            centroid_payload = _to_serializable_vector(centroid) # Ensures vector is serialized before update.
 
             self.client.table('clusters').update({'centroid': centroid_payload}).eq('id', category_id).execute()
             logger.debug(f"Updated centroid for category {category_id}")
@@ -334,7 +373,6 @@ class DatabaseService:
     def get_or_create_general_category(self, user_id: str, embedding_dimension: int = 1024) -> Optional[int]:
         """
         Return the General Documents category id, creating it if needed.
-        <<< Accepts embedding_dimension to avoid 1D vector crashes.
         """
         if not self.is_valid_uuid(user_id):
             logger.warning(f"Cannot create General category; invalid user_id: {user_id}")
@@ -345,8 +383,9 @@ class DatabaseService:
             if general:
                 return general.get('id')
 
-            # Use the provided dimension
-            zero_centroid = np.zeros(embedding_dimension, dtype=np.float32)
+            # Create zero centroid as serializable list
+            zero_centroid = np.zeros(embedding_dimension, dtype=np.float32).tolist()
+            # Insert method handles the list of floats.
             cid = self.insert_category('General Documents', zero_centroid, user_id)
             return cid
         except Exception as e:
@@ -355,6 +394,7 @@ class DatabaseService:
 
     @staticmethod
     def is_valid_uuid(value: str) -> bool:
+        """Static method to safely check if a string is a valid UUID."""
         try:
             uuid.UUID(str(value))
             return True
@@ -365,6 +405,7 @@ class DatabaseService:
 _database_service: Optional[DatabaseService] = None
 
 def get_database_service() -> DatabaseService:
+    """Singleton pattern to initialize and return the DatabaseService instance."""
     global _database_service
     if _database_service is None:
         _database_service = DatabaseService()

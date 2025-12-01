@@ -55,6 +55,7 @@ class DocumentUploadResponse(BaseModel):
     message: str
     doc_id: Optional[str] = None
     task_id: Optional[str] = None
+    file_url: Optional[str] = None
     timestamp: datetime
 
 
