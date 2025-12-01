@@ -7,7 +7,7 @@ Supports async operations and streaming for large documents.
 
 import re
 import asyncio
-from typing import List, Optional, AsyncGenerator, Dict, Any
+from typing import List, Optional, AsyncGenerator, Dict, Any, Union
 from utils import get_logger, TextProcessor
 from settings import get_settings
 
@@ -211,7 +211,7 @@ class ChunkingService:
         preprocess: bool = True,
         return_metadata: bool = False,
         use_semantic: bool = None
-    ) -> List[str] | List[dict]:
+    ) -> Union[List[str], List[dict]]:
         """
         Split text into chunks using paragraph-aware and token-based splitting.
         Combines semantic boundaries with accurate token counting.
@@ -684,7 +684,7 @@ class ChunkingService:
         preprocess: bool = True,
         return_metadata: bool = False,
         use_semantic: bool = None
-    ) -> List[str] | List[dict]:
+    ) -> Union[List[str], List[dict]]:
         """
         Async version of chunk_text for better integration with async systems.
 
@@ -712,7 +712,7 @@ class ChunkingService:
         preprocess: bool = True,
         return_metadata: bool = False,
         batch_size: int = 10
-    ) -> AsyncGenerator[Dict | str, None]:
+    ) -> AsyncGenerator[Union[Dict, str], None]:
         """
         Stream chunks for large documents to reduce memory usage.
         Yields chunks in batches for efficient processing.
@@ -1076,7 +1076,7 @@ class ChunkingService:
         preprocess: bool = True,
         return_metadata: bool = False,
         topic_shift_threshold: float = 0.5
-    ) -> List[str] | List[dict]:
+    ) -> Union[List[str], List[dict]]:
         """
         Split text into chunks using semantic boundary detection.
         Respects topic shifts, headings, and paragraph boundaries.

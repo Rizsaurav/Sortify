@@ -39,7 +39,10 @@ class DatabaseService:
         cluster_id: Optional[int] = None,
         content_hash: Optional[str] = None,
         total_chunks: int = 0,
-        is_chunked: bool = False
+        is_chunked: bool = False,
+        storage_path: Optional[str] = None,
+        file_path: Optional[str] = None,
+        file_url: Optional[str] = None
     ) -> str:
         """
         Insert a document with all schema fields populated.
@@ -50,11 +53,14 @@ class DatabaseService:
                 'user_id': user_id,  # <<< Uses dedicated column
                 'metadata': metadata,
                 # <<< CHANGED: Pass np.ndarray directly for proper VECTOR handling
-                'embedding': embedding, 
+                'embedding': embedding,
                 'cluster_id': cluster_id,
                 'content_hash': content_hash,
                 'total_chunks': total_chunks,
-                'is_chunked': is_chunked
+                'is_chunked': is_chunked,
+                'storage_path': storage_path,
+                'file_path': file_path,
+                'file_url': file_url
             }
             
             response = self.client.table('documents').insert(data).execute()

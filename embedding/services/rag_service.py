@@ -31,7 +31,7 @@ class RAGService:
         
         # Configure Gemini
         genai.configure(api_key=settings.google_api_key)
-        self.llm_model = genai.GenerativeModel('gemini-1.5-flash')
+        self.llm_model = genai.GenerativeModel('gemini-2.5-flash')
         
         self.top_k = settings.rag_top_k
         self.similarity_threshold = settings.rag_similarity_threshold
@@ -64,22 +64,37 @@ class RAGService:
             threshold = threshold or self.similarity_threshold
             
             logger.info(f"RAG query: '{question}' (user={user_id})")
-            
+
+            # Check if this is a general query about user's documents
+            is_general_query = self._is_general_document_query(question)
+
             # 1. Generate question embedding
             question_embedding = self.embedding_service.encode_query(question)
-            
+
             # 2. Search for relevant chunks
-            relevant_chunks = self._search_chunks(
-                question_embedding,
-                user_id,
-                top_k,
-                threshold
-            )
-            
+            # For general queries, use lower threshold and more chunks
+            if is_general_query:
+                logger.info("Detected general document query - using agentic mode")
+                relevant_chunks = self._search_chunks(
+                    question_embedding,
+                    user_id,
+                    top_k=min(top_k * 3, 20),  # Get more chunks for overview
+                    threshold=0.2  # Lower threshold for broader coverage
+                )
+            else:
+                relevant_chunks = self._search_chunks(
+                    question_embedding,
+                    user_id,
+                    top_k,
+                    threshold
+                )
+
             if not relevant_chunks:
+                # Fallback to AI-only response when no documents found
+                logger.info(f"No relevant chunks found, using AI fallback for: '{question}'")
+                fallback_answer = self._generate_fallback_answer(question, user_id)
                 return {
-                    'answer': f"I couldn't find relevant information about: '{question}'. "
-                             f"Try different wording or upload more documents.",
+                    'answer': fallback_answer,
                     'sources': [],
                     'chunks_used': 0,
                     'response_time': time.time() - start_time,
@@ -254,6 +269,84 @@ Instructions:
         except Exception as e:
             logger.error(f"LLM generation failed: {e}")
             return f"Error generating answer: {str(e)}"
+
+    def _is_general_document_query(self, question: str) -> bool:
+        """
+        Detect if query is asking about user's documents in general.
+        Examples: "what files do I have", "summarize my documents", "tell me about my files"
+        """
+        question_lower = question.lower()
+        general_patterns = [
+            'what files', 'my files', 'my documents', 'tell me about',
+            'what do i have', 'show me', 'list', 'summarize',
+            'overview', 'what are', 'all my', 'everything'
+        ]
+        return any(pattern in question_lower for pattern in general_patterns)
+
+    def _generate_fallback_answer(self, question: str, user_id: str) -> str:
+        """
+        Generate AI response when no relevant documents are found.
+        For general queries, get ALL documents and summarize.
+        """
+        # Check if this is a general query about user's files
+        if self._is_general_document_query(question):
+            # Get all user's documents
+            all_docs = self.db_service.get_documents_by_user(user_id)
+            if all_docs:
+                doc_list = "\n".join([
+                    f"- {doc.get('metadata', {}).get('filename', 'Unknown')} (Category: {doc.get('category', 'Uncategorized')})"
+                    for doc in all_docs[:50]  # Limit to 50 docs
+                ])
+
+                prompt = f"""You are a helpful document assistant. The user asked about their uploaded files.
+
+Question: {question}
+
+User's Documents:
+{doc_list}
+
+Instructions:
+- Provide a comprehensive summary of the user's files
+- Group by categories if relevant
+- Be specific and helpful
+- Mention document types and categories"""
+
+                try:
+                    response = self.llm_model.generate_content(prompt)
+                    if hasattr(response, "text") and response.text:
+                        return response.text
+                    elif getattr(response, "candidates", None):
+                        return response.candidates[0].content.parts[0].text
+                except Exception as e:
+                    logger.error(f"Failed to generate document summary: {e}")
+                    return f"You have {len(all_docs)} documents uploaded. Please be more specific in your question to get detailed information."
+
+        # General fallback for non-document questions
+        prompt = f"""You are a helpful AI assistant. The user asked a question but no relevant documents were found in their uploaded files.
+
+Question: {question}
+
+Instructions:
+- Provide a helpful, informative answer based on your general knowledge
+- Be clear and concise
+- If the question is about specific documents or files, acknowledge that you couldn't find them and suggest the user upload relevant documents
+- Otherwise, provide a general answer to their question"""
+
+        try:
+            response = self.llm_model.generate_content(prompt)
+
+            if hasattr(response, "text") and response.text:
+                prefix = "I couldn't find this information in your uploaded documents. However, based on general knowledge:\n\n"
+                return prefix + response.text
+            elif getattr(response, "candidates", None):
+                prefix = "I couldn't find this information in your uploaded documents. However, based on general knowledge:\n\n"
+                return prefix + response.candidates[0].content.parts[0].text
+            else:
+                return f"I couldn't find relevant information about '{question}' in your documents. Try uploading relevant files or rephrase your question."
+
+        except Exception as e:
+            logger.error(f"Fallback generation failed: {e}")
+            return f"I couldn't find relevant information about '{question}' in your documents. Please upload relevant files or try a different question."
 
 
 # Singleton instance

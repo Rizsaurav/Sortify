@@ -96,7 +96,9 @@ export const useFileManagement = () => {
           size: formatFileSize(doc.metadata?.size || 0),
           modified: formatDate(doc.created_at),
           category: categoryName || 'General Documents',
-          storage_path: `${user.id}/${doc.metadata?.filename || 'unknown'}`,
+          storage_path: doc.storage_path || `${user.id}/${doc.metadata?.filename || 'unknown'}`,
+          file_path: doc.file_path,
+          file_url: doc.file_url,
           view_count: 0,
           metadata: {
             ...doc.metadata,

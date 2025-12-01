@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Download, FileText } from 'lucide-react';
+import { X, Download, FileText, AlertCircle } from 'lucide-react';
 import type { FilePreviewState } from '../types';
 
 interface FilePreviewModalProps {
@@ -89,6 +89,20 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             <div className="p-8 max-w-4xl mx-auto">
               <div className="bg-background rounded-lg p-6 shadow-sm">
                 <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground overflow-x-auto">{content}</pre>
+              </div>
+            </div>
+          ) : !url && type !== 'text' ? (
+            <div className="p-6 flex items-center justify-center min-h-[400px]">
+              <div className="text-center max-w-md">
+                <AlertCircle className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">File Not Available</h3>
+                <p className="text-muted-foreground mb-4">
+                  This file is listed in the database but could not be found in storage.
+                  It may have been deleted or moved.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  File: <span className="font-mono">{file.name}</span>
+                </p>
               </div>
             </div>
           ) : (

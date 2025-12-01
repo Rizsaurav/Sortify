@@ -67,7 +67,7 @@ export default function Dashboard() {
     };
 
     initDashboard();
-  }, []); 
+  }, []);
 
   // Prevents default browser drag-and-drop interactions to enable custom drop zones.
   useEffect(() => {
@@ -170,6 +170,12 @@ export default function Dashboard() {
   const handleNavigateToAllFiles = () => { navigate('/all-files'); };
   const handleNavigateToProfile = () => { navigate('/profile'); };
 
+  const handleRAGSearch = (query: string) => {
+    console.log('🔘 Search button clicked! Query:', query);
+    // Navigate to chat page with the query
+    navigate('/chat', { state: { query } });
+  };
+
   const formatStorageUsed = (bytes: number): string => {
     if (bytes === 0) return '0 MB';
     const mb = bytes / (1024 * 1024);
@@ -267,6 +273,7 @@ export default function Dashboard() {
             userProfile={userProfile}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            onRAGSearch={handleRAGSearch}
             darkMode={darkMode}
             onToggleDarkMode={() => setDarkMode(!darkMode)}
             onNavigateToProfile={handleNavigateToProfile}
@@ -326,9 +333,16 @@ export default function Dashboard() {
                   className="w-full pl-12 pr-32 h-14 rounded-xl bg-card border-2 border-border focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all shadow-sm"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      handleRAGSearch(searchQuery);
+                    }
+                  }}
                 />
-                <button 
+                <button
+                  onClick={() => handleRAGSearch(searchQuery)}
                   disabled={!searchQuery.trim()}
+                  type="button"
                   className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg flex items-center gap-2 hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:shadow-none"
                 >
                   <Sparkles className="h-4 w-4" />

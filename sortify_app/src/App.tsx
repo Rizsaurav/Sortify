@@ -8,6 +8,7 @@ import { LoginForm } from "./components/Auth/forms/LogInForm"
 import AllFiles from "./components/Dashboard/AllFiles"
 import Dashboard from "./components/Dashboard/Dashboard"
 import ProfilePage from "./components/Profile/ProfilePage"
+import ChatPage from "./components/ChatPage/ChatPage"
 import { ProfileProvider } from "./components/userProfiles/ProfileProviders"
 
 function App() {
@@ -42,6 +43,9 @@ function App() {
           <Route path="//all-files" element={session || localStorage.getItem("isGuest") === "true" ? <AllFiles /> : <Navigate to="/login" replace />} />
           <Route path="/dashboard" element={session || localStorage.getItem("isGuest") === "true"
             ? <Dashboard />
+            : <Navigate to="/login" replace />} />
+          <Route path="/chat" element={session || localStorage.getItem("isGuest") === "true"
+            ? <ChatPage />
             : <Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to={session ? "/dashboard" : "/login"} replace />} />
           <Route

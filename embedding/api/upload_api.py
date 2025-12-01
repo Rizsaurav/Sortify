@@ -79,6 +79,9 @@ async def upload_document(
 
             )
 
+        # Construct storage path (user_id/filename)
+        storage_path = f"{user_id}/{unique_filename}"
+
         # Insert parent document to database (with FULL content)
         doc_id = db_service.insert_document(
             content=content_str,  # FULL CONTENT, not preview!
@@ -91,7 +94,10 @@ async def upload_document(
                 'size': len(content_bytes)
             },
             embedding=None,  # Will be set after chunking
-            cluster_id=None  # Will be set after categorization
+            cluster_id=None,  # Will be set after categorization
+            storage_path=storage_path,
+            file_path=storage_path,  # Same as storage_path for now
+            file_url=None  # Will be set if needed for public URLs
         )
         
         logger.info(f"Created document {doc_id} with {len(content_str)} characters")

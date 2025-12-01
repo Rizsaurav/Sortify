@@ -14,6 +14,7 @@ interface HeaderProps {
   userProfile: UserProfile | null;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onRAGSearch?: (query: string) => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
   allFiles: UploadedFile[];
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   userProfile,
   searchQuery,
   onSearchChange,
+  onRAGSearch,
   darkMode,
   onToggleDarkMode,
   onNavigateToProfile,
@@ -45,15 +47,43 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="h-16 bg-card border-b border-border flex items-center justify-between px-4 lg:px-6">
       <div className="flex items-center gap-4 flex-1">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-          <input
-            type="text"
-            placeholder="Search files..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+        <div className="relative flex-1 max-w-md flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search files or ask a question..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim() && onRAGSearch) {
+                  onRAGSearch(searchQuery);
+                }
+              }}
+              className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('🖱️ BUTTON ACTUALLY CLICKED!');
+              console.log('onRAGSearch function:', onRAGSearch);
+              console.log('searchQuery:', searchQuery);
+              if (onRAGSearch) {
+                console.log('Calling onRAGSearch...');
+                onRAGSearch(searchQuery);
+              } else {
+                console.error('onRAGSearch is undefined!');
+              }
+            }}
+            disabled={!searchQuery.trim()}
+            type="button"
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+            title="AI Search"
+          >
+            <Search className="w-4 h-4" />
+            <span className="hidden sm:inline">Search</span>
+          </button>
         </div>
       </div>
 
