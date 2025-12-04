@@ -155,16 +155,20 @@ Contributors
 
   **Aaditya**: ""
 
-* **Jira Task: Aaditya - .**
-   * KAN-21 [Bitbucket]()
-* **Jira Task: Aaditya -**
-   * KAN-22 [Bitbucket]()
-* **Jira Task: Aaditya -**
-   * KAN-8, [Bitbucket]()
-* **Jira Task: Aaditya -**
-   * KAN-14, [Bitbucket]()
-* **Jira Task: Aaditya -**
-   * KAN-13, [Bitbucket]()
+* **Jira Task: Aaditya -Testing unit tests**
+   * KAN-18 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-18-testing-unit-tests)
+* **Jira Task: Aaditya -Testing plan tasks**
+   * KAN-31 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-31-allow-users-to-select-multiple-ta)
+* **Jira Task: Aaditya -Make chatbot backend and connect chatbot with Gemini API pro**
+   * KAN-16, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-16-connect-chatbot-with-gemini-api-p)
+* **Jira Task: Aaditya -Generating a category related image for new categories**
+   * KAN-32, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-32-adding-a-functionality-to-drop-pd)
+* **Jira Task: Aaditya -Add a feature to upload pdf files into chatbot**
+   * KAN-12, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-12-connect-chatbot-backend-with-fron)
+* **Jira Task: Aaditya -Refactoring the chatbot UI to be more responsive on smaller screens**
+   * KAN-15, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-15-refactoring-the-chatbot-ui-to-be-)
+* **Jira Task: Aaditya -Testing the chatbot using unit test cases**
+   * KAN-10, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-10-testing-the-chatbot-using-unit-te)
 
   **Shivendra**: ""
 
