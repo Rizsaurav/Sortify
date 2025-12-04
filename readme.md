@@ -144,14 +144,23 @@ Contributors
 
 Contributors
 
-  **Abheek**: "story"
+  **Abheek**: "Optimized embedding models, chunking algorithms, and implemented comprehensive unit testing"
 
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
-* **Jira Task: Abheek - task**
-   * task, [Bitbucket](link)
+* **Jira Task: Abheek - Choose better embedding model**
+   * [KAN-104](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-104), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-104-choose-better-embedding-model-an/)
+* **Jira Task: Abheek - Optimize chunking logic**
+   * [KAN-103](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-103), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-103-optimize-chunking-logic/)
+* **Jira Task: Abheek - Choose algorithm for chunking logic**
+   * [KAN-105](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-105), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-105-choose-algorithm-for-chunking-lo/)
+* **Jira Task: Abheek - Optimize the embedding model**
+   * [KAN-100](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-100), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-100-optimize-the-embedding-model/)
+* **Jira Task: Abheek - Unit test planning**
+   * [KAN-113](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-113), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-113-unit-test-planning/)
+* **Jira Task: Abheek - Unit testing for chunking logic**
+   * [KAN-111](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-111), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-111-unit-testing-for-chunking-logic/)
+* **Jira Task: Abheek - Unit testing front-backend connection**
+   * [KAN-112](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-112), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-112-unit-testing-front-backend-connection/)
+
 
   **Aaditya**: ""
 
