@@ -140,48 +140,182 @@ Contributors
    * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
 
 
+## Sprint 3
+
+Contributors
+
+  **Abheek**: "Optimized embedding models, chunking algorithms, and implemented comprehensive unit testing"
+
+* **Jira Task: Abheek - Choose better embedding model**
+   * [KAN-104](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-104), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-104-choose-better-embedding-model-an/)
+* **Jira Task: Abheek - Optimize chunking logic**
+   * [KAN-103](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-103), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-103-optimize-chunking-logic/)
+* **Jira Task: Abheek - Choose algorithm for chunking logic**
+   * [KAN-105](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-105), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-105-choose-algorithm-for-chunking-lo/)
+* **Jira Task: Abheek - Optimize the embedding model**
+   * [KAN-100](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-100), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-100-optimize-the-embedding-model/)
+* **Jira Task: Abheek - Unit test planning**
+   * [KAN-113](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-113), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-113-unit-test-planning/)
+* **Jira Task: Abheek - Unit testing for chunking logic**
+   * [KAN-111](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-111), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-111-unit-testing-for-chunking-logic/)
+* **Jira Task: Abheek - Unit testing front-backend connection**
+   * [KAN-112](https://cs3398-zabraks-fall.atlassian.net/browse/KAN-112), [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/src/KAN-112-unit-testing-front-backend-connection/)
+
+  **Aaditya**: ""
+
+* **Jira Task: Aaditya -Testing unit tests**
+   * KAN-18 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-18-testing-unit-tests)
+* **Jira Task: Aaditya -Testing plan tasks**
+   * KAN-31 [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-31-allow-users-to-select-multiple-ta)
+* **Jira Task: Aaditya -Make chatbot backend and connect chatbot with Gemini API pro**
+   * KAN-16, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-16-connect-chatbot-with-gemini-api-p)
+* **Jira Task: Aaditya -Generating a category related image for new categories**
+   * KAN-32, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-32-adding-a-functionality-to-drop-pd)
+* **Jira Task: Aaditya -Add a feature to upload pdf files into chatbot**
+   * KAN-12, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/feature/KAN-12-connect-chatbot-backend-with-fron)
+* **Jira Task: Aaditya -Refactoring the chatbot UI to be more responsive on smaller screens**
+   * KAN-15, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-15-refactoring-the-chatbot-ui-to-be-)
+* **Jira Task: Aaditya -Testing the chatbot using unit test cases**
+   * KAN-10, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-10-testing-the-chatbot-using-unit-te)
+
+  **Shivendra**: "1. As a student, I want to have a smooth user experience of the landing page, As a student, I want a dashboard that shows all my documents so that I can navigate through them easily, As a user, I want the site to work well on mobile so that I can use it anywhere."
+
+* **Jira Task: Shivendra -Planning unit tests**
+   * KAN-109, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-109-planning-unit-tests)
+* **Jira Task: Shivendra -Refactor and update the CSS design of the landing page**
+   * KAN-80, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-80-refactor-and-update-the-css)
+* **Jira Task: Shivendra -Implementation of unit tests**
+   * KAN-110, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-110-implementation-of-unit-tests)
+* **Jira Task: Shivendra -Develop and upload the logo for the project**
+   * KAN-40, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-40-develop-and-upload-the-logo)
+* **Jira Task: Shivendra -Refactor the Profile page section and break down into smaller reusable components**
+   * KAN-87, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/commits/branch/KAN-87-refactor-the-profile-page-section)
+
+
+   **Saurav**: "Work on integrating database with category assignment, changes, notifications and fetching information."
+
+* **Jira Task: Saurav - Design database schema for efficient storage and easier retrieval**
+   * KAN-90, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/feature/KAN-90-work-on-having-better-database-sc)
+* **Jira Task: Saurav - Improve accuracy of categories assignment and fix the notification toast**
+   * KAN-2, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/feature/KAN-2-work-on-better-having-better-accur)
+   * KAN-2, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/KAN-2-work-on-better-having-better-accur)
+
+* **Jira Task: Saurav -Fix the state changes on drag and drop feature**
+   * KAN-3, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/feature/KAN-3-fix-the-state-changes-on-drag-and-)
+* **Jira Task: Saurav - Detects auplicate files and assigns a unique name**
+   * KAN-44, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/KAN-44-smart-duplicate-detection-as-a-st)
+* **Jira Task: Saurav - Display all files when a user clicks on a particular category**
+      * KAN-36, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/KAN-36-allow-users-to-click-a-course-nam)
+* **Jira Task: Saurav - Implement loading spinners, error messages if the API call fails, and a friendly message if no documents exist.**
+      * KAN-42, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/KAN-42-implement-loading-spinners-error-)
+* **Jira Task: Saurav -Unit Tests for features and results**
+      * KAN-107, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/%7B87739b3b-6b07-4488-ba64-3919c2017f46%7D/branch/KAN-107-test-execution-and-results)
+
+  Abhishek Verma Allamneni: ""
+
+* **Jira Task: Abhishek -**
+   * KAN-64, [Bitbucket](link)
+
+
 ## Reports
-![alt text](./BurnupCharts/sprint2.png)
-
-
-
-## Next Steps
-
-**Aaditya**: 
-
-* Implementing chatbot functionality
-* Integrating Gemini Pro to Chatbot
-* Applying RAG to chatbot to get filtered result
-
-**Shivendra**:
- * Refactor CSS of the landing page
- * Refactor ui of documents categories 
- * Implement functional profile section to the dashboard
- 
-**Saurav**:
-* Refined Categorization of documents
-* Making the RAG work
-* Fixing state change on changing categories
-
-**Abheek**
-* Working on optimizing backend
-* Adding full stack features
-* Working on ML features
+![alt text](./BurnupCharts/sprint3.png)
 
 
 
 ## Setup
-What are the project requirements/dependencies? Where are they listed? A requirements.txt or a Pipfile.lock file perhaps? Where is it located?
 
-Proceed to describe how to install / setup one's local environment / get started with the project.
+### Prerequisites
+- Python 3.11 or higher
+- pip (Python package manager)
+
+### Dependencies
+The project dependencies are listed in `requirements.txt` located at:
+```
+sortify/embedding/requirements.txt
+```
+
+Key dependencies include:
+- **FastAPI** (0.117.1) - Web framework for building the API
+- **Uvicorn** (0.37.0) - ASGI server for running FastAPI
+- **Google Generative AI** (0.8.5) - For AI-powered features
+- **Sentence Transformers** (5.1.1) - For document embeddings and semantic search
+- **PyTorch** (2.8.0) - Deep learning framework
+- **pypdf** (5.2.0) - For PDF processing
+- **Supabase** - Database and authentication (configured via environment variables)
+
+### Installation Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd sortify
+   ```
+
+2. **Set up Python virtual environment** (recommended)
+   ```bash
+   cd embedding
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Configure environment variables**
+   - Copy the `.env` file to `embedding/.env` and configure the following:
+     - `GOOGLE_API_KEY` - Your Google AI API key
+     - `SUPABASE_URL` - Your Supabase project URL
+     - `SUPABASE_KEY` - Your Supabase API key
+
+5. **Install frontend dependencies**
+   ```bash
+   cd ../sortify_app
+   npm install
+   ```
 
 
 ## Usage
-- Clone the repo
-- Install dependencies through requirements.txt
 
-`
-    pip install -r requirements.txt
+### Running the Backend (Python/FastAPI)
+
+1. Navigate to the embedding directory:
+   ```bash
+   cd sortify/embedding
+   ```
+
+2. Activate your virtual environment:
+   ```bash
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. Start the FastAPI server:
+   ```bash
+   uvicorn app:app --reload
+   ```
+   The API will be available at `http://localhost:8000`
+
+### Running the Frontend (React/Vite)
+
+1. Navigate to the sortify_app directory:
+   ```bash
+   cd sortify/sortify_app
+   ```
+
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+   The application will be available at `http://localhost:5173`
+
+### Using the Application
+
+1. **Sign up/Login** - Create an account or log in with your credentials
+2. **Upload Documents** - Upload your PDF files and they will be automatically organized
+3. **Search** - Use the AI-powered search to find specific content across all your documents
+4. **Chat** - Interact with the chatbot to ask questions about your uploaded documents
+5. **Organize** - Documents are automatically categorized into folders based on their content
 
 
 ## Project Status
