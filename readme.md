@@ -140,8 +140,62 @@ Contributors
    * KAN-33, [Bitbucket](https://bitbucket.org/cs3398-zabraks-f25/sortify/branch/KAN-33-implement-a-file-placement-hook-t)
 
 
+## Sprint 3
+
+Contributors
+
+  **Abheek**: "story"
+
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+* **Jira Task: Abheek - task**
+   * task, [Bitbucket](link)
+
+  **Aaditya**: ""
+
+* **Jira Task: Aaditya - .**
+   * KAN-21 [Bitbucket]()
+* **Jira Task: Aaditya -**
+   * KAN-22 [Bitbucket]()
+* **Jira Task: Aaditya -**
+   * KAN-8, [Bitbucket]()
+* **Jira Task: Aaditya -**
+   * KAN-14, [Bitbucket]()
+* **Jira Task: Aaditya -**
+   * KAN-13, [Bitbucket]()
+
+  **Shivendra**: ""
+
+* **Jira Task: Shivendra -**
+   * KAN-85, [Bitbucket]()
+* **Jira Task: Shivendra -**
+   * KAN-81, [Bitbucket]()
+* **Jira Task: Shivendra -**
+   * KAN-78, [Bitbucket]()
+* **Jira Task: Shivendra -**
+   * KAN-84, [Bitbucket]()
+
+   **Saurav**: ""
+
+* **Jira Task: Saurav -**
+   * KAN-79, [Bitbucket]()
+* **Jira Task: Saurav -**
+   * KAN-28, [Bitbucket]()
+* **Jira Task: Saurav -**
+   * KAN-30, [Bitbucket]()
+* **Jira Task: Saurav -**
+   * KAN-33, [Bitbucket]()
+
+  Abhishek Verma Allamneni: ""
+
+* **Jira Task: Abhishek -**
+   * KAN-64, [Bitbucket](link)
+
+
 ## Reports
-![alt text](./BurnupCharts/sprint2.png)
+![alt text](./BurnupCharts/sprint3.png)
 
 
 
