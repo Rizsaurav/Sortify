@@ -921,6 +921,7 @@ class CategorizationService:
             except Exception as exc:
                 logger.error(f"Failed to recategorize document {doc_id}: {exc}")
                 stats['errors'] += 1
+                stats
 
         logger.info(
             "Recategorized uncategorized documents "
