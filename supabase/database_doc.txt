@@ -1,0 +1,166 @@
+# Sortify Database Schema & Queries Documentation
+
+This document describes the Supabase database schema, data types, RLS policies, and example queries.  
+It serves as a reference for all teammates (backend, frontend, ML).
+
+---
+
+## Schema
+
+### 1. `documents` table
+| Column       | Type            | Notes |
+|--------------|-----------------|-------|
+| `id`         | uuid            | Primary key, default `gen_random_uuid()` |
+| `content`    | text            | Raw extracted text from file |
+| `embedding`  | vector(1536)    | pgvector column storing embeddings |
+| `metadata`   | jsonb           | Extra info (e.g., `{ "user_id": "uuid", "type": "pdf" }`) |
+| `cluster_id` | int (FK)        | References `clusters.id`, nullable until clustering |
+| `created_at` | timestamp       | Default: `now()` |
+
+```sql
+create table documents (
+  id uuid primary key default gen_random_uuid(),
+  content text,
+  embedding vector(1536),
+  metadata jsonb,
+  cluster_id int references clusters(id) on delete set null,
+  created_at timestamp default now()
+);
+```
+
+---
+
+### 2. `clusters` table
+| Column       | Type      | Notes |
+|--------------|-----------|-------|
+| `id`         | serial    | Primary key |
+| `label`      | text      | Folder/cluster name |
+| `user_id`    | uuid      | (Optional) If clusters are user-private |
+| `created_at` | timestamp | Default: `now()` |
+
+```sql
+create table clusters (
+  id serial primary key,
+  label text,
+  user_id uuid,
+  created_at timestamp default now()
+);
+```
+
+---
+
+## Row Level Security (RLS)
+
+Before policies, enable RLS:  
+```sql
+alter table documents enable row level security;
+alter table clusters enable row level security;
+```
+
+### Documents Policies
+```sql
+-- View own docs
+create policy "Users can view their own documents"
+on documents for select
+using (auth.uid() = (metadata->>'user_id')::uuid);
+
+-- Insert own docs
+create policy "Users can insert their own documents"
+on documents for insert
+with check (auth.uid() = (metadata->>'user_id')::uuid);
+
+-- Update own docs
+create policy "Users can update their own documents"
+on documents for update
+using (auth.uid() = (metadata->>'user_id')::uuid)
+with check (auth.uid() = (metadata->>'user_id')::uuid);
+
+-- Delete own docs
+create policy "Users can delete their own documents"
+on documents for delete
+using (auth.uid() = (metadata->>'user_id')::uuid);
+```
+
+### Clusters Policies (if user-private)
+```sql
+create policy "Users can view their own clusters"
+on clusters for select
+using (auth.uid() = user_id);
+
+create policy "Users can manage their own clusters"
+on clusters for all
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+```
+
+---
+
+## RPC Function for Semantic Search
+
+Make sure the RPC function `match_documents` is created:  
+```sql
+create or replace function match_documents(
+  query_embedding vector(1536),
+  match_count int
+)
+returns table (id uuid, content text, similarity float)
+language sql stable as $$
+  select id, content, 1 - (embedding <=> query_embedding) as similarity
+  from documents
+  order by embedding <=> query_embedding
+  limit match_count;
+$$;
+```
+
+---
+
+## Example Queries
+
+### Insert a document
+```sql
+insert into documents (content, embedding, metadata, cluster_id)
+values (
+  'AI notes',
+  '[0.1,0.2,...]'::vector,
+  '{"user_id": "uuid"}',
+  3
+);
+```
+
+### Search documents by similarity
+```sql
+select * from match_documents('[0.1,0.2,...]'::vector, 5);
+```
+
+### Group documents into smart folders
+```sql
+select c.label, array_agg(d.content) as docs
+from documents d
+join clusters c on d.cluster_id = c.id
+group by c.label;
+```
+
+### Fetch clusters directly (with docs)
+```sql
+select * from smart_folders;
+```
+
+---
+
+## Development Notes
+
+- **Embeddings**: 1024-d vectors using BGE-M3 model for superior accuracy on academic content.
+  - Previous: 1536-d vectors (OpenAI text-embedding-ada-002)
+  - Current: 1024-d vectors (BAAI/bge-m3) - better quality, self-hosted
+  - Stored as JSONB arrays for flexibility (supports any dimension)
+
+- **Index**: HNSW index created on `documents.embedding` for fast similarity search.  
+
+- **Auth**: Supabase Auth (Google login + optional email/password).  
+
+- **RLS**: All inserts must include the `user_id` in metadata for policies to work.  
+
+- **Clustering**: ML pipeline assigns `cluster_id` automatically after embeddings are generated.  
+
+---
+
