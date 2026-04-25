@@ -1,38 +1,93 @@
-# Sortify
-> Sortify is a web app that will organise all of a students' possible documents acting like a organised brain dump. This is where their files/documents are automatically organised for an efficient future reference. This could be used for all of their canvas lecture pdfs, with a feature that summarises those pdfs like a 
-continuous chat. We have a team of 5: Saurav Rijal, Shivendra Bhagat, Aaditya Baniya, Abhishek Verma Allamneni and Abheek Pradhan.
+# Sortify 🧠
 
+An AI-powered document organization and retrieval platform that automatically categorizes academic files and enables semantic search through a RAG pipeline.
 
-## Table of Contents
-* [General Info](#general-information)
-* [Technologies Used](#technologies-used)
-* [Features](#features)
-* [Screenshots](#screenshots)
-* [Setup](#setup)
-* [Usage](#usage)
-* [Project Status](#project-status)
-* [Room for Improvement](#room-for-improvement)
-* [Acknowledgements](#acknowledgements)
-* [Contact](#contact)
-<!-- * [License](#license) -->
+---
 
+## What It Does
 
-## General Information
-- Provide general information about your project here.
-- Students especially undergrad tend not to be organised with their documents having to go back and look for them time and again. This makes their work efficient. 
-- The purpose of this project is to have a space where a student can find all of their academic materials which are also organised and accessible. 
-- We undertook this project because we personally struggle with this and heard concerns about the same from many students like us. We feel this solution would be great for students.
-<!-- You don't have to answer all the questions - just the ones relevant to your project. -->
+- **Automatic categorization** — Upload PDFs, lecture notes, or assignments and Sortify classifies them into relevant folders without manual sorting.
+- **Semantic search** — Query your documents in natural language using vector embeddings and retrieval-augmented generation (RAG) to surface relevant content.
+- **AI chat assistant** — Ask questions about your uploaded files and receive context-aware answers grounded in your actual documents.
+- **Responsive dashboard** — Access, browse, and manage all organized documents from a clean, mobile-friendly interface.
 
+---
 
-## Technologies Used
-- Firebase
-- React
-- Tailwind CSS
-- Python
-- Flask or Express
+## Screenshots
 
-## Features
+### Login Page
+![Login Page](./sortify_app/public/loginpage.png)
+
+### Dashboard View
+![Dashboard View](./sortify_app/public/sortifyss1.png)
+
+### Sortify Assistant
+![Sortify Assistant](./sortify_app/public/sortifyss2.png)
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|:------|:-------------|
+| Frontend | React, TypeScript, Vite, TailwindCSS |
+| Backend | Python, FastAPI |
+| Database | PostgreSQL, PGVector |
+| AI / ML | RAG, Sentence Transformers, Vector Similarity Search |
+| Infrastructure | Supabase, Node.js |
+| Version Control | Git + GitHub |
+
+---
+
+## Architecture
+
+The system follows a standard RAG pipeline. Uploaded documents are parsed, split into chunks, and converted into vector embeddings using Sentence Transformers. These embeddings are stored in PostgreSQL via the PGVector extension. When a user submits a query — either through search or the chat assistant — the query is embedded, matched against stored vectors using cosine similarity, and the top-matching chunks are passed as context to a language model to generate a grounded response. Document categorization runs as a background task on upload, assigning files to folders based on content analysis.
+
+---
+
+## My Contributions
+
+**Shivendra Bhagat** — Frontend engineering across 3 sprints:
+
+- Initialized the React + Vite project, established the codebase structure, and configured the build toolchain
+- Designed and implemented the main dashboard layout, landing page UI components, and navigation structure
+- Built the chatbot interface and integrated the trigger flow from the AI Search action on the dashboard
+- Developed the user profile section and refactored it into smaller, reusable components
+- Implemented responsive design across all views and tested layouts on multiple screen sizes
+- Refactored and restructured CSS across the dashboard and landing page for maintainability
+- Designed the project logo and branding assets
+- Planned and implemented frontend unit tests using Vitest
+
+---
+
+## Getting Started
+
+**Prerequisites:** Node.js, Python 3.11+
+
+```bash
+# Clone the repository
+git clone https://github.com/sh1vendra/Sortify.git
+cd sortify
+
+# Frontend
+cd sortify_app
+npm install
+npm run dev                # → http://localhost:3000
+
+# Backend (separate terminal)
+cd embedding
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --reload   # → http://localhost:8000
+```
+
+**Environment variables** — Create `embedding/.env` with:
+```
+GOOGLE_API_KEY=<your-key>
+SUPABASE_URL=<your-url>
+SUPABASE_KEY=<your-key>
+```
 
 ## Sprint 1
 
@@ -216,131 +271,6 @@ Contributors
 * **Jira Task: Abhishek -**
    * KAN-64, [Bitbucket](link)
 
-
-## Reports
-![alt text](./BurnupCharts/sprint3.png)
-
-
-
-## Setup
-
-### Prerequisites
-- Python 3.11 or higher
-- pip (Python package manager)
-
-### Dependencies
-The project dependencies are listed in `requirements.txt` located at:
-```
-sortify/embedding/requirements.txt
-```
-
-Key dependencies include:
-- **FastAPI** (0.117.1) - Web framework for building the API
-- **Uvicorn** (0.37.0) - ASGI server for running FastAPI
-- **Google Generative AI** (0.8.5) - For AI-powered features
-- **Sentence Transformers** (5.1.1) - For document embeddings and semantic search
-- **PyTorch** (2.8.0) - Deep learning framework
-- **pypdf** (5.2.0) - For PDF processing
-- **Supabase** - Database and authentication (configured via environment variables)
-
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd sortify
-   ```
-
-2. **Set up Python virtual environment** (recommended)
-   ```bash
-   cd embedding
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure environment variables**
-   - Copy the `.env` file to `embedding/.env` and configure the following:
-     - `GOOGLE_API_KEY` - Your Google AI API key
-     - `SUPABASE_URL` - Your Supabase project URL
-     - `SUPABASE_KEY` - Your Supabase API key
-
-5. **Install frontend dependencies**
-   ```bash
-   cd ../sortify_app
-   npm install
-   ```
-
-
-## Usage
-
-### Running the Backend (Python/FastAPI)
-
-1. Navigate to the embedding directory:
-   ```bash
-   cd sortify/embedding
-   ```
-
-2. Activate your virtual environment:
-   ```bash
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Start the FastAPI server:
-   ```bash
-   uvicorn app:app --reload
-   ```
-   The API will be available at `http://localhost:8000`
-
-### Running the Frontend (React/Vite)
-
-1. Navigate to the sortify_app directory:
-   ```bash
-   cd sortify/sortify_app
-   ```
-
-2. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   The application will be available at `http://localhost:5173`
-
-### Using the Application
-
-1. **Sign up/Login** - Create an account or log in with your credentials
-2. **Upload Documents** - Upload your PDF files and they will be automatically organized
-3. **Search** - Use the AI-powered search to find specific content across all your documents
-4. **Chat** - Interact with the chatbot to ask questions about your uploaded documents
-5. **Organize** - Documents are automatically categorized into folders based on their content
-
-
-## Project Status
-Project is: _in progress_
-
-
-## Room for Improvement
-Include areas you believe need improvement / could be improved. Also add TODOs for future development.
-
-Room for improvement:
-- Deciding on the stack.
-
-To do:
-- Making a responsive frontend
-- Making a CRUD framework ready first.
-
-
-## Acknowledgements
-Give credit here.
-- This project was inspired by all students.
-- This project was based on our general problems.
-- Many thanks to...
-
-
-## Contact
 
 
 
